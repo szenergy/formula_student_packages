@@ -11,6 +11,32 @@ The proposed system architecture is shown below. The following considerations ar
 
 All components are to be developed in ROS 2 Humble.
 
+``` mermaid
+flowchart TD
+    S[State Machine <br>/plan_state_machine] -.->|/plan_state*| LS[LIDAR segementation<br>/prcp_ground_obstacle_segm_lidar]
+    S -.-> CS[Cone detection camera<br> and de-projection]
+    S -.-> O[Object fusion]
+    CS -->|/prcp_obj_list_camera| O
+    LS -->|/prcp_obj_list_lidar| O
+    O -->|/prcp_obj_list_fused| T[Trajectory planner<br>/plan_trajectory_planner]
+    T --> C[Control<br>/ctrl_vehicle_control]
+    S -.-> T
+    S -.-> C
+    O --> M[Map Creation<br>/prc_slam]
+    M -->|/prcp_map| T
+    L[Localization<br>/prcp_odometry_kf_prediction] --> T
+    C --> CAN[To CAN]
+    classDef light fill:#34aec5,stroke:#152742,stroke-width:2px,color:#152742  
+    classDef dark fill:#152742,stroke:#34aec5,stroke-width:2px,color:#34aec5
+    classDef white fill:#ffffff,stroke:#152742,stroke-width:2px,color:#15274
+    classDef dash fill:#ffffff,stroke:#152742,stroke-width:2px,color:#15274, stroke-dasharray: 5 5
+    classDef red fill:#ef4638,stroke:#152742,stroke-width:2px,color:#fff
+    class CS,LS,L,T,M,C white
+    class O light
+    class S dash
+    class CAN red
+ ``` 
+
 ![Architecture](img/arch.png)
 
 
