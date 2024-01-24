@@ -55,7 +55,7 @@ ros2 launch formula_student_bringup tf_static.launch.py
 ## Directory structure
 
 ``` r
-~/ros2/src/
+~/ros2_ws/src/
     ├── formula_student_packages # this repo
     │   ├── cone_detection_lidar
     │   │   ├── launch
