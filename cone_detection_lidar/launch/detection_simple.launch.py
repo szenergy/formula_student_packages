@@ -17,7 +17,7 @@ def generate_launch_description():
             parameters=[
                 {'cloud_in_topic': LaunchConfiguration("topic")},
                 {'verbose1': False},
-                {'verbose2': False},
+                {'verbose2': True},
             ]
         )
 

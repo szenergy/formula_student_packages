@@ -51,7 +51,7 @@ cd ~/ros2_ws/src
 ```
 
 ``` bash
-https://github.com/szenergy/formula_student_packages
+git clone https://github.com/szenergy/formula_student_packages
 ```
 
 ## Build
@@ -77,6 +77,9 @@ E.g:
 ``` bash
 ros2 launch formula_student_bringup tf_static.launch.py
 ```
+``` bash
+ros2 launch cone_detection_lidar detection_simple.launch.py
+```
 
 ## Directory structure
 
@@ -96,3 +99,8 @@ ros2 launch formula_student_bringup tf_static.launch.py
         ├── launch
         └── src
 ```
+## Related packages
+
+- https://github.com/url-kaist/patchwork-plusplus-ros/tree/ROS2
+- https://github.com/jkk-research/lidar_cluster_ros2
+- https://github.com/jkk-research/pointcloud_to_grid
