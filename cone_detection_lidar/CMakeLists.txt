@@ -58,14 +58,19 @@ target_link_libraries(detection_simple ${PCL_LIBRARIES})
 ament_target_dependencies(detection_simple  ${ament_dependencies} )
 target_compile_features(detection_simple PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-
+add_executable(grid_trajectory src/grid_trajectory.cpp)
+target_link_libraries(grid_trajectory ${PCL_LIBRARIES})
+ament_target_dependencies(grid_trajectory  ${ament_dependencies} )
+target_compile_features(grid_trajectory PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
 install(DIRECTORY 
   launch
+  config
   DESTINATION share/${PROJECT_NAME})
 
 install(TARGETS 
   detection_simple
+  grid_trajectory
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
