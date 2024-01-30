@@ -28,7 +28,7 @@ class ConeDetector(Node):
         # ----- Init camera data and thresholds -----
 
         self.scriptDir = os.path.dirname(os.path.realpath(__file__))
-        self.frame_number = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # self.frame_number = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.number_of_detections = []
         self.fps_counter = []
         self.confThreshold = 0.5
@@ -38,9 +38,9 @@ class ConeDetector(Node):
         self.br = CvBridge()
 
         # ----- Init ROS data -----
-        self.zed_subscriber = self.create_subscriber(Image, '/zed2i/zed_node/right/image_rect_color', self.imageCallback, qos_profile_sensor_data)
-        self.cone_coord_publisher = self.create_publisher(Float32MultiArray, 'cone_coordinates', queue_size=1)
-        self.cone_image_publisher = self.create_publisher(Image, 'detect_cone_img', queue_size=1)
+        self.zed_subscriber = self.create_subscription(Image, '/zed2i/zed_node/right/image_rect_color', self.imageCallback, qos_profile_sensor_data)
+        self.cone_coord_publisher = self.create_publisher(Float32MultiArray, 'cone_coordinates', 1)
+        self.cone_image_publisher = self.create_publisher(Image, 'detect_cone_img', 1)
         
         self.class_colors = {'YELLOW':(0, 255, 255), 'SMALL_ORANGE':(0, 100, 255), 'OTHER':(255, 255, 0),'BLUE':(255, 0, 0)}
 
@@ -78,11 +78,9 @@ class ConeDetector(Node):
         pTime = 0
         # ------------------------------ GET IMAGE DATA ------------------------------
         
-        frame = self.br.imgmsg_to_cv(msg)
-        
-        ret, frame = self.cap.read()
+        frame = self.br.imgmsg_to_cv2(msg)
 
-        frame = cv2.resize(frame, (self.width, self.height))
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
         
         blob = cv2.dnn.blobFromImage(frame, 1/255, (self.wT, self.hT), [0,0,0], 1, crop=False)
         self.net.setInput(blob)
@@ -145,49 +143,33 @@ class ConeDetector(Node):
         #print(blue_array)
 
         # ---- ROS PUBLISH ----
-        if args.ros:
-            self.coord_publisher.publishFloatOnMax(yellow_array)
-            self.coord_publisher.publishFloatOnMax(blue_array)
-            if args.countmsg:
-                actSentCones = len(yellow_array) + len(blue_array)
-                self.sentCones.append(actSentCones)
-                self.countCones += actSentCones
+        """ self.coord_publisher.publishFloatOnMax(yellow_array)
+        self.coord_publisher.publishFloatOnMax(blue_array)
+        if args.countmsg:
+            actSentCones = len(yellow_array) + len(blue_array)
+            self.sentCones.append(actSentCones)
+            self.countCones += actSentCones """
 
         cTime = time.time()
         fps = 1/(cTime - pTime)
         pTime = cTime
         
-        if args.plot:
-            self.fps_counter.append(int(fps))
-        
         cv2.putText(frame, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 5, (0, 0, 255), 3)
-
-        # Save Video
-        if args.save:
-            self.writer.write(frame)
-
-        key = cv2.waitKey(1)
-        if key==ord('q'):
-            break
         
+        key = cv2.waitKey(1)
+
         if key == ord('c'):
             print("Image captured")
             cv2.imwrite("img_old.jpg", frame)
-        
-        if args.save:
-            self.writer.release()
-        
-        if args.plot:
-            self.plotting(self.number_of_detections, 'Number of Cones')
-            self.plotting(self.fps_counter, 'FPS')
 
-        if args.countmsg:
+            """if args.countmsg:
             with open(self.scriptDir+"/log/countSentConesDetector.log", 'w') as f:
                 f.write(f"Number of Cones sent through Detector: {self.countCones}")
             print(f"Number of Cones sent through Detector: {self.countCones}")
-            self.plotting(self.sentCones, "Number of cones sent through Detector")
+            self.plotting(self.sentCones, "Number of cones sent through Detector") """
 
-        processed_image self.br.cv_to_imgmsg(frame)
+        processed_image = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+        processed_image = self.br.cv2_to_imgmsg(frame)
         self.cone_image_publisher.publish(processed_image)
 
 
@@ -216,8 +198,8 @@ class ConeDetector(Node):
         # count objects of img
         # print(len(bbox))
         # ----- Plot Number of Detected objects -----
-        if args.plot:
-            self.number_of_detections.append(len(bbox))
+        # if args.plot:
+        #     self.number_of_detections.append(len(bbox))
 
                 
         indices = cv2.dnn.NMSBoxes(bbox, confs, self.confThreshold, self.nmsThreshold)
@@ -268,12 +250,11 @@ def main(args=None):
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--weight', type=str, default=scriptDir+'/resources/weights/yolov4-tiny-new.weights', help='This argument gives the trained network .weight file\'s path for yolo.')
-    parser.add_argument('--config', type=str, default=scriptDir+'/resources/cfg/yolov4-tiny-custom.cfg', help='This argument gives the necessary file\'s path for yolo.')
+    parser.add_argument('--weight', type=str, default=scriptDir+'/resources/yolov4-tiny.weights', help='This argument gives the trained network .weight file\'s path for yolo.')
+    parser.add_argument('--config', type=str, default=scriptDir+'/resources/yolov4-tiny-custom.cfg', help='This argument gives the necessary file\'s path for yolo.')
     parser.add_argument('--display', action='store_true', help='This argument provides to display the camera/video window to visualize how the detection works.')
     parser.add_argument('--save', help='If given, it saves the detection video as an mp4 formatted file. (You only need to pass the name without .mp4 format)')
     parser.add_argument('--plot', action='store_true', help='This argument provides to plot some measurements in the end of the detection.')
-    parser.add_argument('--ros', action='store_true', help='This argument provides to publish detected cones to an ROS topic.') 
     parser.add_argument('--countmsg', action='store_true', help='This argument provides to count detected cones.') 
     args_detector, unknown = parser.parse_known_args()
     
