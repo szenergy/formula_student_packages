@@ -107,6 +107,10 @@ class PointCloudToGrid : public rclcpp::Node
       {
         visualize_grid = param.as_bool();
       }
+      if (param.get_name() == "search_iter")
+      {
+        search_iter = param.as_int();
+      }
       // grid_map.frame_out = config.frame_out;
       grid_map.paramRefresh();
     }
@@ -133,6 +137,7 @@ public:
     this->declare_parameter<double>("search_start_mid_deg", search_start_mid_deg);
     this->declare_parameter<double>("search_length", search_length);
     this->declare_parameter<bool>("visualize_grid", visualize_grid);
+    this->declare_parameter<int>("search_iter", search_iter);
 
     this->get_parameter("mapi_topic_name", grid_map.mapi_topic_name);
     this->get_parameter("maph_topic_name", grid_map.maph_topic_name);
@@ -151,6 +156,7 @@ public:
     this->get_parameter("search_start_mid_deg", search_start_mid_deg);
     this->get_parameter("search_length", search_length);
     this->get_parameter("visualize_grid", visualize_grid);
+    this->get_parameter("search_iter", search_iter);
 
     grid_map.paramRefresh();
 
@@ -222,85 +228,33 @@ private:
         }
       }
     }
-    // just experimenting with drawing lines
-    double search_range = search_range_deg * M_PI / 180;
-    double search_resolution = search_resolution_deg * M_PI / 180;
-    double search_start_mid = search_start_mid_deg * M_PI / 180;
-    int loop_increment = int(search_range / search_resolution);
-    std::vector<bool> search_results(loop_increment);
-    double x_start = -0.6;
-    double y_start = 0.0;
-    for (int loop = 0; loop < loop_increment; loop++)
-    {
-      double search_ang = -0.5 * search_range + double(loop) * search_resolution;
-      search_results[loop] = grid_map.drawline(hpoints, x_start, y_start, search_start_mid + search_ang, search_length);
+    if (search_iter > 6){
+      search_iter = 6;
     }
-    // find the longest continous true (free) segment in search_results
-    int max_true = 0;
-    int max_true_start = 0;
-    int max_true_end = 0;
-    int true_count = 0;
-    int true_end = 0;
-    for (int loop = 0; loop < loop_increment; loop++)
+    std::vector<PointXY> traj(search_iter + 1);
+    double max_true_angle = 0.0;
+
+    traj[0] = PointXY(0.0, 0.0);
+    double traj_search_start_mid = search_start_mid_deg;
+    for(int i = 1; i <= search_iter; i++)
     {
-      if (search_results[loop])
-      {
-        true_count += 1;
-      }
-      else
-      {
-        if (loop >= 1 and search_results[loop - 1])
-        {
-          true_end = loop - 1;
-        }
-        if (true_count > max_true)
-        {
-
-          max_true = true_count;
-          max_true_end = true_end;
-        }
-        true_count = 0;
-      }
+      traj[i] = grid_map.angualar_search(traj[i-1].x, traj[i-1].y, search_range_deg, search_resolution_deg, traj_search_start_mid, search_length, hpoints, max_true_angle);
+      traj_search_start_mid = max_true_angle * 180 / M_PI;
     }
-    // if everything is true (false else never evaluated)
-    if (true_count > max_true)
-    {
-      max_true = true_count;
-      max_true_end = loop_increment - 1;
-    }
-    max_true_start = max_true_end - max_true + 1;
-
-    // this for loop is only fro visualization
-    // true and false segments (green and red)
-    for (int i = 0; i < loop_increment; i++)
-    {
-      if (search_results[i])
-      {
-        hpoints[(grid_map.cell_num_y / 2 + i - loop_increment / 2) * grid_map.cell_num_x] = 110;
-      }
-      else
-      {
-        hpoints[(grid_map.cell_num_y / 2 + i - loop_increment / 2) * grid_map.cell_num_x] = -128;
-      }
-    }
-
-    // RCLCPP_INFO_STREAM(this->get_logger(), "max_true: " << max_true << " max_true_start: " << max_true_start << " max_true_end: " << max_true_end);
-    int max_true_center = (max_true_start + max_true_end) / 2;
-    double max_true_angle = -0.5 * search_range + search_start_mid + double(max_true_center) * search_resolution;
-
-    double x_end = x_start + search_length * cos(max_true_angle);
-    double y_end = y_start + search_length * sin(max_true_angle);
 
     visualization_msgs::msg::MarkerArray mark_array;
     visualization_msgs::msg::Marker debug1_marker, line1_marker;
-    init_debug_marker(debug1_marker, x_end, y_end, 1);
+    init_debug_marker(debug1_marker, traj[0].x, traj[0].y, 1);
     init_line_marker(line1_marker, 2);
     debug1_marker.header.frame_id = input_msg->header.frame_id;
     debug1_marker.header.stamp = this->now();
     line1_marker.header.frame_id = input_msg->header.frame_id;
     line1_marker.header.stamp = this->now();
-    add_point_to_line_marker(line1_marker, 0.0, 0.0);
-    add_point_to_line_marker(line1_marker, x_end, y_end);
+    for(int i = 1; i <= search_iter; i++)
+    {
+      add_point_to_line_marker(line1_marker, traj[i-1].x, traj[i-1].y);
+      add_point_to_line_marker(line1_marker, traj[i-0].x, traj[i-0].y);
+    }    
     mark_array.markers.push_back(debug1_marker);
     mark_array.markers.push_back(line1_marker);
     intensity_grid->header.stamp = this->now();
@@ -331,7 +285,8 @@ private:
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
   std::string cloud_in_topic = "nonground";
   bool verbose1 = true, verbose2 = false, visualize_grid = true;
-  double search_range_deg = 120, search_resolution_deg = 10, search_start_mid_deg = -180;
+  int search_iter = 4;
+  double search_range_deg = 120.0, search_resolution_deg = 10.0, search_start_mid_deg = -180.0;
   double search_length = 10.0;
   // nav_msgs::msg::OccupancyGrid::Ptr intensity_grid = std::make_shared<nav_msgs::msg::OccupancyGrid>();
   // nav_msgs::msg::OccupancyGrid::Ptr intensity_grid(new nav_msgs::msg::OccupancyGrid);

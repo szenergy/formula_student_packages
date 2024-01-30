@@ -29,7 +29,8 @@ def generate_launch_description():
                 {'search_length': 4.0}, # meters
                 {'search_range_deg': 80.0}, # degrees
                 {'search_resolution_deg': 0.5}, # degrees
-                {'search_start_mid_deg': -180.0}, # degrees                
+                {'search_start_mid_deg': -180.0}, # degrees 
+                {'search_iter': 4}, # positive integer number             
             ]
         )
     ])

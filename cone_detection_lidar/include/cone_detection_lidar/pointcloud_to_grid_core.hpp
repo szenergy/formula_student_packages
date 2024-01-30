@@ -5,10 +5,12 @@
 class PointXY
 {
 public:
-  int x;
-  int y;
+  double x;
+  double y;
+  PointXY() : x(0), y(0) {} // Default constructor
+  // initialize with x and y
+  PointXY(double x_val, double y_val) : x(x_val), y(y_val) {}
 };
-
 class PointXYZI
 {
 public:
