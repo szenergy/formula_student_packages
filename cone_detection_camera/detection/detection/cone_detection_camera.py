@@ -74,8 +74,6 @@ class ConeDetector(Node):
     # ------------------------------ Implementing methods ------------------------------
     # ***** Image Callback for ZED camera *****
     def imageCallback(self, msg):
-        cTime = 0
-        pTime = 0
         # ------------------------------ GET IMAGE DATA ------------------------------
         
         frame = self.br.imgmsg_to_cv2(msg)
@@ -149,12 +147,6 @@ class ConeDetector(Node):
             actSentCones = len(yellow_array) + len(blue_array)
             self.sentCones.append(actSentCones)
             self.countCones += actSentCones """
-
-        cTime = time.time()
-        fps = 1/(cTime - pTime)
-        pTime = cTime
-        
-        cv2.putText(frame, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 5, (0, 0, 255), 3)
         
         key = cv2.waitKey(1)
 
