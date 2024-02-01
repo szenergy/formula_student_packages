@@ -7,11 +7,27 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
-add_executable(cone_detection_camera src/cone_detection_camera.cpp)
+
+include_directories(
+  include/projection
+)
+
+file(GLOB_RECURSE SOURCE_FILES
+    ${CMAKE_SOURCE_DIR}/src/*.cpp)
+
+file(GLOB_RECURSE HEADER_FILES
+    ${CMAKE_SOURCE_DIR}/include/projection/*.h
+    ${CMAKE_SOURCE_DIR}/include/projection/*.hpp)
+
+add_executable(cone_detection_camera src/cone_detection_camera.cpp ${HEADER_FILES} ${SOURCE_FILES})
+ament_target_dependencies(cone_detection_camera rclcpp std_msgs)
+
 target_include_directories(cone_detection_camera PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)

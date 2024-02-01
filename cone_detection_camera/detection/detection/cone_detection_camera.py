@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import rclpy
 from rclpy.node import Node
 
 from rclpy.qos import qos_profile_sensor_data
@@ -20,7 +21,6 @@ import os
 import time
 
 import argparse
-from detection.pub_coord import *
 
 class ConeDetector(Node):
     def __init__(self, weight, config, display, save, plot, countmsg):
@@ -102,7 +102,7 @@ class ConeDetector(Node):
 
         # Draw rectangle on frame
         detections = []
-        print("="*50)
+        # print("="*50)
         for d in data:
             cx = (d[0] + d[0] + d[2])//2
             cy = (d[1] + d[1] + d[3] + d[3])//2
@@ -136,14 +136,14 @@ class ConeDetector(Node):
                 b += 1
                 b_id += 2
         
-        print(detections)
+        # print(detections)
         #print(yellow_array)
         #print(blue_array)
 
         # ---- ROS PUBLISH ----
-        """ self.coord_publisher.publishFloatOnMax(yellow_array)
-        self.coord_publisher.publishFloatOnMax(blue_array)
-        if args.countmsg:
+        self.publishCoordinates(yellow_array)
+        self.publishCoordinates(blue_array)
+        """if args.countmsg:
             actSentCones = len(yellow_array) + len(blue_array)
             self.sentCones.append(actSentCones)
             self.countCones += actSentCones """
@@ -217,11 +217,10 @@ class ConeDetector(Node):
         plt.xlabel('FRAMES')
         plt.show()
 
-    def publishFloatOnMax(self, detections):
-
+    def publishCoordinates(self, detections):
         # Only publish if it does not contain string because of Float32MultiArray
         for d in detections:
-            if ('Yellow' in d) or ('Blue' in d):
+            if ('Yellow' in d) or ('Blue' in d) or ('Small_orange' in d):
                 return
         
         # Convert all data to float
@@ -231,9 +230,8 @@ class ConeDetector(Node):
         
         for det in detections:
             published_data = Float32MultiArray(data=det)
-            print(f'ROS data:{published_data.data}')
-            self.cone_publisher.publish(published_data)
-            time.sleep(0.000001)
+            # print(f'ROS data:{published_data.data}')
+            self.cone_coord_publisher.publish(published_data)
 
 def main(args=None):
     rclpy.init(args=args)

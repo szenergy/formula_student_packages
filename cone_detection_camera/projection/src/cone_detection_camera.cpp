@@ -1,10 +1,18 @@
-#include <cstdio>
+#include "RosHandler.h"
+#include "CheckingVariables.h"
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv) 
 {
-  (void) argc;
-  (void) argv;
+    
+    CheckingVariables* Variables = CheckingVariables::getInstance();
+    rclcpp::init(argc, argv);
+    // ROS_INFO_STREAM("Node started: " << ros::this_node::getName());
 
-  printf("hello world projection package\n");
-  return 0;
+    RosHandler* r_handler = new RosHandler();
+
+    rclcpp::spin(std::make_shared<RosHandler>());
+
+    delete r_handler;
+    delete Variables;
+	return 0;
 }
