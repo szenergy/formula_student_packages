@@ -6,16 +6,26 @@ RosHandler::RosHandler() : Node("cone_projection"){
     );
     this->pub_coords = this->create_publisher<std_msgs::msg::Float32MultiArray>("pub_proj_coords", 1);
 
-    // param_subscriber_ = std::make_shared<rclcpp::ParameterEvenHandler>(this);
+    this->declare_parameter<int>("horizon_height", CheckingVariables::HORIZON_HEIGHT);
+    this->declare_parameter<float>("factor_horizontal", CheckingVariables::FACTOR_HORIZONTAL);
+    this->declare_parameter<float>("factor_vertical", CheckingVariables::FACTOR_VERTICAL);
+    this->declare_parameter<float>("base_width", CheckingVariables::BASE_WIDTH);
+    this->declare_parameter<float>("cone_min_area", CheckingVariables::CONE_MIN_AREA);
+    this->declare_parameter<float>("dist_max", CheckingVariables::DIST_MAX);
+    this->declare_parameter<bool>("display", CheckingVariables::DISPLAY_INFO);
+    
+    this->get_parameter("horizon_height", CheckingVariables::HORIZON_HEIGHT);
+    this->get_parameter("factor_horizontal", CheckingVariables::FACTOR_HORIZONTAL);
+    this->get_parameter("factor_vertical", CheckingVariables::FACTOR_VERTICAL);
+    this->get_parameter("base_width", CheckingVariables::BASE_WIDTH);
+    this->get_parameter("cone_min_area", CheckingVariables::CONE_MIN_AREA);
+    this->get_parameter("dist_max", CheckingVariables::DIST_MAX);
+    this->get_parameter("display", CheckingVariables::DISPLAY_INFO);
 
-    // cb_handle_ = param_subscriber_->add_parameter_callback("display", callback_display);
+    
 
-    // dynamic_reconfigure::Server<my_dyn_rec::ValidateConfig> server;
-    // dynamic_reconfigure::Server<my_dyn_rec::ValidateConfig>::CallbackType f;
-
-    // f = boost::bind(&RosHandler::paramsCallback, this, _1, _2);
-    // server.setCallback(f);
-
+    cb_handle_ = this->add_on_set_parameters_callback(std::bind(&RosHandler::parametersCallback, this, std::placeholders::_1));
+    
     // rclcpp::spin(std::make_shared<RosHandler>());
 }
 
@@ -39,22 +49,33 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
     //ROS_INFO_STREAM("ID: " << p->getId() << " X: " << p->getPosition().getX() << " Y: " << p->getPosition().getY());    
 }
 
-// void RosHandler::paramsCallback(my_dyn_rec::ValidateConfig &config, uint32_t level)
-// {
-//     CheckingVariables::HORIZON_HEIGHT = config.horizon_height;
-//     CheckingVariables::FACTOR_HORIZONTAL = config.factor_horizontal;
-//     CheckingVariables::FACTOR_VERTICAL = config.factor_vertical;
-//     CheckingVariables::BASE_WIDTH = config.base_width;
-//     CheckingVariables::CONE_MIN_AREA = config.min_cone_area;
-//     CheckingVariables::DIST_MAX = config.max_cone_distance;
-//     CheckingVariables::DISPLAY_INFO = config.display;
-//     CheckingVariables::getInstance()->updateParams();
-//     // ROS_INFO_STREAM("\nUpdated params:\n" << "HORIZON HEIGHT: " << CheckingVariables::HORIZON_HEIGHT << '\n'
-//     //                 << "FACTOR HORIZONTAL: " << CheckingVariables::FACTOR_HORIZONTAL << '\n'
-//     //                 << "FACTOR VERTICAL" << CheckingVariables::FACTOR_VERTICAL << '\n'
-//     //                 << "BASE WIDTH: " << CheckingVariables::BASE_WIDTH << '\n'
-//     //                 << "MINIMUM AREA OF CONE: " << CheckingVariables::CONE_MIN_AREA << '\n'
-//     //                 << "MAXIMUM DISTANCE: " << CheckingVariables::DIST_MAX << '\n'
-//     //                 << "HORIZON_HEIGHT_REL: " << CheckingVariables::getInstance()->HORIZON_HEIGHT_REL << '\n'
-//     //                 << "DISPLAY INFO: " << CheckingVariables::getInstance()->DISPLAY_INFO << '\n');
-// }
+
+rcl_interfaces::msg::SetParametersResult RosHandler::parametersCallback(const std::vector<rclcpp::Parameter> &parameters){
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        result.reason = "success";
+        for (const auto &param: parameters){
+            if(param.get_name()=="display"){
+                CheckingVariables::DISPLAY_INFO = param.as_bool();
+            }else if(param.get_name()=="horizon_height"){
+                CheckingVariables::HORIZON_HEIGHT = param.as_int();
+            }else if(param.get_name()=="factor_horizontal"){
+                CheckingVariables::FACTOR_HORIZONTAL = param.as_double();
+            }else if(param.get_name()=="factor_vertical"){
+                CheckingVariables::FACTOR_VERTICAL = param.as_double();
+            }else if(param.get_name()=="base_width"){
+                CheckingVariables::BASE_WIDTH = param.as_double();
+            }else if(param.get_name()=="cone_min_area"){
+                CheckingVariables::CONE_MIN_AREA = param.as_double();
+            }else if(param.get_name()=="dist_max"){
+                CheckingVariables::DIST_MAX = param.as_double();
+            }
+            RCLCPP_INFO(this->get_logger(), "%s", param.get_name().c_str());
+            RCLCPP_INFO(this->get_logger(), "%s", param.get_type_name().c_str());
+            RCLCPP_INFO(this->get_logger(), "%s", param.value_to_string().c_str());
+        }
+
+        CheckingVariables::getInstance()->updateParams();
+        // Here update class attributes, do some actions, etc.
+        return result;
+}
