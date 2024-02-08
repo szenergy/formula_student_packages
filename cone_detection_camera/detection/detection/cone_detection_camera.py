@@ -79,8 +79,9 @@ class ConeDetector(Node):
         frame = self.br.imgmsg_to_cv2(msg)
 
         frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
-        
-        blob = cv2.dnn.blobFromImage(frame, 1/255, (self.wT, self.hT), [0,0,0], 1, crop=False)
+
+        masked_frame = self.maskImage(frame)
+        blob = cv2.dnn.blobFromImage(masked_frame, 1/255, (self.wT, self.hT), [0,0,0], 1, crop=False)
         self.net.setInput(blob)
 
         layerNames = self.net.getLayerNames()
@@ -98,7 +99,8 @@ class ConeDetector(Node):
         #print(outputs[1].shape)
         #print(outputs[2].shape)
 
-        data = self.findObjects(outputs, frame)
+        
+        data = self.findObjects(outputs, masked_frame)
 
         # Draw rectangle on frame
         detections = []
@@ -164,6 +166,17 @@ class ConeDetector(Node):
         processed_image = self.br.cv2_to_imgmsg(frame)
         self.cone_image_publisher.publish(processed_image)
 
+    def maskImage(self, img, output=None):
+        blank = np.zeros(img.shape[:2], dtype='uint8')
+        pts = np.array([[165, 376], [233, 320],
+                        [402, 320], [465, 376],
+                        [668, 376], [668, 190],
+                        [0, 190], [0, 376]],
+                        np.int32)
+        pts = pts.reshape((-1,1,2))
+        mask = cv2.fillPoly(blank, [pts], (255, 255, 255))
+        output = cv2.bitwise_and(img, img, mask=mask)
+        return output
 
     # ***** Find objects of frame *****
     def findObjects(self, outputs, img):
