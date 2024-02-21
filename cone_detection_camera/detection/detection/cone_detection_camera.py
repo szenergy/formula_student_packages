@@ -123,20 +123,18 @@ class ConeDetector(Node):
 
         yellow_array = []
         blue_array = []
+        orange_array = []
 
-        y = 0
-        b = 0
         y_id = 1
         b_id = 2
+        o_id = 3
         for det in detections:
             if (det[0]=='Yellow'):
                 yellow_array.append([float(y_id), det[1], det[2], float(det[3]), float(det[4])])
-                y += 1
-                y_id += 2
             elif (det[0]=='Blue'):
                 blue_array.append([float(b_id), det[1], det[2], float(det[3]),float(det[4])])
-                b += 1
-                b_id += 2
+            elif (det[0]=='Orange'):
+                orange_array.append([float(o_id), det[1], det[2], float(det[3]),float(det[4])])
         
         # print(detections)
         #print(yellow_array)
@@ -145,6 +143,7 @@ class ConeDetector(Node):
         # ---- ROS PUBLISH ----
         self.publishCoordinates(yellow_array)
         self.publishCoordinates(blue_array)
+        self.publishCoordinates(orange_array)
         """if args.countmsg:
             actSentCones = len(yellow_array) + len(blue_array)
             self.sentCones.append(actSentCones)
@@ -240,10 +239,17 @@ class ConeDetector(Node):
         for data in detections:
             for d in data:
                 d = float(d)
-        
+        published_data = Float32MultiArray()
+        i=1
         for det in detections:
-            published_data = Float32MultiArray(data=det)
-            # print(f'ROS data:{published_data.data}')
+            actual_dim = MultiArrayDimension()
+            actual_dim.size = len(det)
+            actual_dim.label = "cone_"+str(i)
+            published_data.layout.dim.append(actual_dim)
+            i+=1
+            for d in det:
+                published_data.data.append(d)
+            # print(f'ROS data:{det}')
             self.cone_coord_publisher.publish(published_data)
 
 def main(args=None):
