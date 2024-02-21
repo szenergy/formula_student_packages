@@ -40,7 +40,7 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
     markerPoint.scale.y = 0.2;
     markerPoint.scale.z = 0.5;
     markerPoint.color.a = 1.0;
-    int yellow_id = 2;
+    int yellow_id = 1;
     int blue_id = 2;
     
     for(unsigned int i=0; i<msg.layout.dim.size(); i++){
@@ -64,14 +64,14 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
         markerPoint.pose.position.z = 0.0;
         markerPoint.lifetime = rclcpp::Duration::from_seconds(0.1);
 
-        if(markerPoint.id==1){
+        if(ProjectionHandler::get().getCurParticle()->getId()==1){
             markerPoint.color.r = 1.0;
             markerPoint.color.g = 1.0;
             markerPoint.color.b = 0.3;
-            markerPoint.id += yellow_id;
+            markerPoint.id = yellow_id;
             yellow_id += 2;
             markerArrayYellow.markers.push_back(markerPoint);
-        }else if(markerPoint.id==2){
+        }else if(ProjectionHandler::get().getCurParticle()->getId()==2){
             markerPoint.color.r = 0.0;
             markerPoint.color.g = 0.0;
             markerPoint.color.b = 1.0;
@@ -79,7 +79,6 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
             blue_id += 2;
             markerArrayBlue.markers.push_back(markerPoint);
         }
-        
     }
 
     pub_coords->publish(pub_msg);
@@ -87,8 +86,6 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
     this->pub_marker_array_blue->publish(markerArrayBlue);
 
     pub_msg.data.clear();
-    //ROS_INFO_STREAM("ID: " << msg.header.frame_id << " X: " << msg.point.x << " Y: " << msg.point.y << " Area: " << msg.point.z);    
-    //ROS_INFO_STREAM("ID: " << p->getId() << " X: " << p->getPosition().getX() << " Y: " << p->getPosition().getY());    
 }
 
 
