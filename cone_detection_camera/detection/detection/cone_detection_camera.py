@@ -124,6 +124,7 @@ class ConeDetector(Node):
         yellow_array = []
         blue_array = []
         orange_array = []
+        result_array = []
 
         y_id = 1
         b_id = 2
@@ -131,19 +132,22 @@ class ConeDetector(Node):
         for det in detections:
             if (det[0]=='Yellow'):
                 yellow_array.append([float(y_id), det[1], det[2], float(det[3]), float(det[4])])
+                result_array.append([float(y_id), det[1], det[2], float(det[3]), float(det[4])])
             elif (det[0]=='Blue'):
                 blue_array.append([float(b_id), det[1], det[2], float(det[3]),float(det[4])])
+                result_array.append([float(b_id), det[1], det[2], float(det[3]),float(det[4])])
             elif (det[0]=='Orange'):
                 orange_array.append([float(o_id), det[1], det[2], float(det[3]),float(det[4])])
+                result_array.append([float(o_id), det[1], det[2], float(det[3]),float(det[4])])
         
         # print(detections)
         #print(yellow_array)
         #print(blue_array)
 
         # ---- ROS PUBLISH ----
-        self.publishCoordinates(yellow_array)
-        self.publishCoordinates(blue_array)
-        self.publishCoordinates(orange_array)
+        # self.publishCoordinates(yellow_array)
+        # self.publishCoordinates(blue_array)
+        self.publishCoordinates(result_array)
         """if args.countmsg:
             actSentCones = len(yellow_array) + len(blue_array)
             self.sentCones.append(actSentCones)
@@ -231,9 +235,9 @@ class ConeDetector(Node):
 
     def publishCoordinates(self, detections):
         # Only publish if it does not contain string because of Float32MultiArray
-        for d in detections:
-            if ('Yellow' in d) or ('Blue' in d) or ('Small_orange' in d):
-                return
+        # for d in detections:
+        #     if ('Yellow' in d) or ('Blue' in d) or ('Small_orange' in d):
+        #         return
         
         # Convert all data to float
         for data in detections:
@@ -250,7 +254,7 @@ class ConeDetector(Node):
             for d in det:
                 published_data.data.append(d)
             # print(f'ROS data:{det}')
-            self.cone_coord_publisher.publish(published_data)
+        self.cone_coord_publisher.publish(published_data)
 
 def main(args=None):
     rclpy.init(args=args)

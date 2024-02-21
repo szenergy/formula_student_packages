@@ -56,13 +56,13 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
 
         markerPoint.id = ProjectionHandler::get().getCurParticle()->getId();
 
-        markerPoint.action = visualization_msgs::msg::Marker::MODIFY;
+        // markerPoint.action = visualization_msgs::msg::Marker::MODIFY;
         markerPoint.type = visualization_msgs::msg::Marker::CYLINDER;
         markerPoint.header.frame_id = "base_link";
         markerPoint.pose.position.x = ProjectionHandler::get().getCurParticle()->getPosition().getX()/100;
         markerPoint.pose.position.y = ProjectionHandler::get().getCurParticle()->getPosition().getY()/100;
         markerPoint.pose.position.z = 0.0;
-        markerPoint.lifetime = rclcpp::Duration::from_seconds(0.1);
+        markerPoint.lifetime = rclcpp::Duration::from_seconds(1.0);
 
         if(ProjectionHandler::get().getCurParticle()->getId()==1){
             markerPoint.color.r = 1.0;
