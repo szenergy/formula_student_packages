@@ -7,7 +7,7 @@ int CheckingVariables::HORIZON_HEIGHT = 320;
 float CheckingVariables::FACTOR_HORIZONTAL = 250.0f;
 float CheckingVariables::FACTOR_VERTICAL = 100.0f;
 float CheckingVariables::BASE_WIDTH = 113.0f;
-float CheckingVariables::CONE_MIN_AREA = 30.0f;
+float CheckingVariables::CONE_MIN_AREA = 25.0f;
 float CheckingVariables::DIST_MAX = 1000.0f;
 
 CheckingVariables::CheckingVariables()

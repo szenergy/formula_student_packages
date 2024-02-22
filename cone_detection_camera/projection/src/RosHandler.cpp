@@ -48,13 +48,7 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
         //ProjectionHandler::get().doProjection(new Cone(1, 157, 324, 30.0f));
 
         // This check is enough
-        if(!ProjectionHandler::get().getCurParticle()) { return; }
-
-        pub_msg.data.push_back(ProjectionHandler::get().getCurParticle()->getId());
-        pub_msg.data.push_back(ProjectionHandler::get().getCurParticle()->getPosition().getX());
-        pub_msg.data.push_back(ProjectionHandler::get().getCurParticle()->getPosition().getY());
-
-        markerPoint.id = ProjectionHandler::get().getCurParticle()->getId();
+        if(!ProjectionHandler::get().getCurParticle()) { continue; }
 
         // markerPoint.action = visualization_msgs::msg::Marker::MODIFY;
         markerPoint.type = visualization_msgs::msg::Marker::CYLINDER;
@@ -75,10 +69,14 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
             markerPoint.color.r = 0.0;
             markerPoint.color.g = 0.0;
             markerPoint.color.b = 1.0;
-            markerPoint.id += blue_id;
+            markerPoint.id = blue_id;
             blue_id += 2;
             markerArrayBlue.markers.push_back(markerPoint);
         }
+
+        pub_msg.data.push_back(markerPoint.id);
+        pub_msg.data.push_back(ProjectionHandler::get().getCurParticle()->getPosition().getX());
+        pub_msg.data.push_back(ProjectionHandler::get().getCurParticle()->getPosition().getY());
     }
 
     pub_coords->publish(pub_msg);

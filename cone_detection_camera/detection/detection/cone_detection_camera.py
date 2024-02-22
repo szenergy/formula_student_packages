@@ -243,6 +243,7 @@ class ConeDetector(Node):
         for data in detections:
             for d in data:
                 d = float(d)
+
         published_data = Float32MultiArray()
         i=1
         for det in detections:
