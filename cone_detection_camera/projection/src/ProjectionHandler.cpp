@@ -22,8 +22,6 @@ Particle* ProjectionHandler::getCurParticle() { return m_curParticle; }
 
 void ProjectionHandler::doProjection(Cone* _cone) {
 
-	// std::cout << _cone->getId() << ' ' << _cone->getPosition().getX() << ' ' << _cone->getPosition().getY() << ' ' << _cone->getArea() << '\n' ;
-
 	// Free the m_curParticle first. If the validation fails the getCurParticle() results nullptr
 	// otherwise points at a new Particle object.
 	delete m_curParticle;
