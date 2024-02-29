@@ -81,6 +81,7 @@ class ConeDetector(Node):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
 
         masked_frame = self.maskImage(frame)
+        # cv2.imshow("Masked image", masked_frame)
         blob = cv2.dnn.blobFromImage(masked_frame, 1/255, (self.wT, self.hT), [0,0,0], 1, crop=False)
         self.net.setInput(blob)
 
@@ -173,7 +174,7 @@ class ConeDetector(Node):
         blank = np.zeros(img.shape[:2], dtype='uint8')
         pts = np.array([[165, 376], [233, 320],
                         [402, 320], [465, 376],
-                        [668, 376], [668, 190],
+                        [672, 376], [672, 190],
                         [0, 190], [0, 376]],
                         np.int32)
         pts = pts.reshape((-1,1,2))

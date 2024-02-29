@@ -3,7 +3,7 @@
 CheckingVariables* CheckingVariables::instance = 0;
 
 bool CheckingVariables::DISPLAY_INFO = true;
-int CheckingVariables::HORIZON_HEIGHT = 320;
+int CheckingVariables::HORIZON_HEIGHT = 186;
 float CheckingVariables::FACTOR_HORIZONTAL = 100.0f;
 float CheckingVariables::FACTOR_VERTICAL = 150.0f;
 float CheckingVariables::BASE_WIDTH = 200.0f;

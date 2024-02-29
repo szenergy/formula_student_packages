@@ -61,7 +61,7 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
         markerPoint.pose.orientation.y = 0.0;
         markerPoint.pose.orientation.z = 0.0;
         markerPoint.pose.orientation.w = 1.0;
-        markerPoint.lifetime = rclcpp::Duration::from_seconds(1.0);
+        markerPoint.lifetime = rclcpp::Duration::from_seconds(0.1);
 
         if(ProjectionHandler::get().getCurParticle()->getId()==1){
             markerPoint.color.r = 1.0;
