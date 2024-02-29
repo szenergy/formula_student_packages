@@ -5,11 +5,15 @@ RosHandler::RosHandler() : Node("cone_projection"){
         "cone_coordinates", 1, std::bind(&RosHandler::float32_callback, this,std::placeholders::_1)
     );
     
+
+    this->horizon_height_range_int.set__from_value(0).set__to_value(376).set__step(1);
+    this->descriptor.integer_range= {horizon_height_range_int};
+
     this->pub_coords = this->create_publisher<std_msgs::msg::Float32MultiArray>("pub_proj_coords", 1);
     this->pub_marker_array_yellow = this->create_publisher<visualization_msgs::msg::MarkerArray>("yellow_cones", 1);
     this->pub_marker_array_blue = this->create_publisher<visualization_msgs::msg::MarkerArray>("blue_cones", 1);
 
-    this->declare_parameter<int>("horizon_height", CheckingVariables::HORIZON_HEIGHT);
+    this->declare_parameter<int>("horizon_height", CheckingVariables::HORIZON_HEIGHT, descriptor);
     this->declare_parameter<float>("factor_horizontal", CheckingVariables::FACTOR_HORIZONTAL);
     this->declare_parameter<float>("factor_vertical", CheckingVariables::FACTOR_VERTICAL);
     this->declare_parameter<float>("base_width", CheckingVariables::BASE_WIDTH);

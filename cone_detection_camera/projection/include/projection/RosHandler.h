@@ -13,6 +13,9 @@
 class RosHandler : public rclcpp::Node
 {
 private:
+    rcl_interfaces::msg::ParameterDescriptor descriptor;
+    rcl_interfaces::msg::IntegerRange horizon_height_range_int;
+
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_coords;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_coords;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_marker_array_yellow;
