@@ -14,6 +14,7 @@
 #include "cone_detection_lidar/pointcloud_to_grid_core.hpp"
 #include "cone_detection_lidar/trajectory.hpp"
 #include "cone_detection_lidar/marker.hpp"
+#include "cone_detection_lidar/tree.hpp"
 // c++
 #include <chrono>
 #include <functional>
@@ -231,14 +232,19 @@ private:
     if (search_iter > 6){
       search_iter = 6;
     }
-    std::vector<PointXY> traj(search_iter + 1);
+    std::vector<PointXY> traj(search_iter + 1); // TODO: remove and use only tree
     double max_true_angle = 0.0;
+    Tree tree;
 
     traj[0] = PointXY(0.0, 0.0);
+    tree.modifyRoot(PointXY(0.0, 0.0));
+    auto node_actual = tree.getRoot();
     double traj_search_start_mid = search_start_mid_deg;
     for(int i = 1; i <= search_iter; i++)
     {
       traj[i] = grid_map.angualar_search(traj[i-1].x, traj[i-1].y, search_range_deg, search_resolution_deg, traj_search_start_mid, search_length, hpoints, max_true_angle);
+      node_actual = tree.addNode(node_actual, traj[i]);
+      // TODO: add alternative paths to tree
       traj_search_start_mid = max_true_angle * 180 / M_PI;
     }
 
@@ -250,11 +256,7 @@ private:
     debug1_marker.header.stamp = this->now();
     line1_marker.header.frame_id = input_msg->header.frame_id;
     line1_marker.header.stamp = this->now();
-    for(int i = 1; i <= search_iter; i++)
-    {
-      add_point_to_line_marker(line1_marker, traj[i-1].x, traj[i-1].y);
-      add_point_to_line_marker(line1_marker, traj[i-0].x, traj[i-0].y);
-    }    
+    tree.markerTree(tree.root, line1_marker); // add tree to line marker, which can be visualized in rviz
     mark_array.markers.push_back(debug1_marker);
     mark_array.markers.push_back(line1_marker);
     intensity_grid->header.stamp = this->now();

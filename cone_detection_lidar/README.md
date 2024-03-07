@@ -15,6 +15,19 @@ cd ~/ros2_ws/ && colcon build --symlink-install --packages-select cone_detection
 </details>
 
 
+## Run 
+<details>
+<summary> don't forget to source </summary>
+
+``` bash
+source ~/ros2_ws/install/setup.bash
+```
+</details>
+
+``` bash
+ros2 launch cone_detection_lidar grid_detection.launch.py
+```
+
 ## Remarks
 
 In VS code it is advised to add the following to include path:
