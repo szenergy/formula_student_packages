@@ -229,28 +229,48 @@ private:
         }
       }
     }
-    if (search_iter > 6){
+    if (search_iter > 6)
+    {
       search_iter = 6;
     }
-    std::vector<PointXY> traj(search_iter + 1); // TODO: remove and use only tree
-    double max_true_angle = 0.0;
+    std::vector<PointXYori> traj_end_points(1);
+    double traj_search_angle = 0.0;
     Tree tree;
 
-    traj[0] = PointXY(0.0, 0.0);
+    traj_end_points[0] = PointXYori(0.0, 0.0, 0.0);
     tree.modifyRoot(PointXY(0.0, 0.0));
     auto node_actual = tree.getRoot();
     double traj_search_start_mid = search_start_mid_deg;
-    for(int i = 1; i <= search_iter; i++)
+    SearchConfig config;
+    for (int i = 1; i <= search_iter; i++)
     {
-      traj[i] = grid_map.angualar_search(traj[i-1].x, traj[i-1].y, search_range_deg, search_resolution_deg, traj_search_start_mid, search_length, hpoints, max_true_angle);
-      node_actual = tree.addNode(node_actual, traj[i]);
-      // TODO: add alternative paths to tree
-      traj_search_start_mid = max_true_angle * 180 / M_PI;
+      for (size_t i = 0; i < traj_end_points.size(); ++i)
+      {
+        config.x_start = traj_end_points[i].x;
+        config.y_start = traj_end_points[i].y;
+        config.search_range_deg = search_range_deg;
+        config.search_resolution_deg = search_resolution_deg;
+        config.search_start_mid_deg = traj_search_start_mid;
+        config.search_length = search_length;
+        std::vector<PointXYori> actual_end_points = grid_map.angualar_search(config, hpoints, traj_search_angle);
+        node_actual = tree.addNode(node_actual, traj_end_points[i]);
+        traj_search_start_mid = traj_search_angle * 180 / M_PI;
+        // TODO: test this logic with multiple actual end points
+        for(size_t j = 0; j < actual_end_points.size(); ++j)
+        {
+          if (j == 0){
+            traj_end_points[i] = actual_end_points[j]; // replace the current end point with the first actual end point
+          }
+          else{
+            traj_end_points.insert(traj_end_points.begin() + i, actual_end_points[j]); // insert if there are more than one actual end points
+          }
+        }
+      }
     }
 
     visualization_msgs::msg::MarkerArray mark_array;
     visualization_msgs::msg::Marker debug1_marker, line1_marker;
-    init_debug_marker(debug1_marker, traj[0].x, traj[0].y, 1);
+    init_debug_marker(debug1_marker, traj_end_points[0].x, traj_end_points[0].y, 1);
     init_line_marker(line1_marker, 2);
     debug1_marker.header.frame_id = input_msg->header.frame_id;
     debug1_marker.header.stamp = this->now();

@@ -7,6 +7,19 @@
 #include <functional>
 #include <iostream>
 
+class SearchConfig
+{
+public:
+    double x_start;
+    double y_start;
+    double search_range_deg;
+    double search_resolution_deg;
+    double search_start_mid_deg;
+    double search_length;
+    // default constructor
+    SearchConfig() : x_start(0), y_start(0), search_range_deg(0), search_resolution_deg(0), search_start_mid_deg(0), search_length(0) {}
+};
+
 // Extending the GridMap class
 class GridMapTrajectory : public GridMap
 {
@@ -77,21 +90,20 @@ public:
         return true;
     }
 
-    PointXY angualar_search(double x_start, double y_start, double search_range_deg, double search_resolution_deg, double search_start_mid_deg, double search_length, std::vector<signed char> &hpoints, double &max_true_angle)
+    std::vector<PointXYori> angualar_search(SearchConfig s, std::vector<signed char> &hpoints, double &max_true_angle)
     {
-
-        double search_range = search_range_deg * M_PI / 180;
-        double search_resolution = search_resolution_deg * M_PI / 180;
-        double search_start_mid = search_start_mid_deg * M_PI / 180;
+        double search_range = s.search_range_deg * M_PI / 180;
+        double search_resolution = s.search_resolution_deg * M_PI / 180;
+        double search_start_mid = s.search_start_mid_deg * M_PI / 180;
         int loop_increment = int(search_range / search_resolution);
         std::vector<bool> search_results(loop_increment);
         for (int loop = 0; loop < loop_increment; loop++)
         {
             double search_ang = -0.5 * search_range + double(loop) * search_resolution;
-            search_results[loop] = drawline(hpoints, x_start, y_start, search_start_mid + search_ang, search_length);
+            search_results[loop] = drawline(hpoints, s.x_start, s.y_start, search_start_mid + search_ang, s.search_length);
         }
         // find the longest continous true (free) segment in search_results
-        int max_true = 0;
+        int max_true1 = 0;
         int max_true_start = 0;
         int max_true_end = 0;
         int true_count = 0;
@@ -108,25 +120,26 @@ public:
                 {
                     true_end = loop - 1;
                 }
-                if (true_count > max_true)
+                if (true_count > max_true1)
                 {
 
-                    max_true = true_count;
+                    max_true1 = true_count;
                     max_true_end = true_end;
                 }
                 true_count = 0;
             }
         }
         // if everything is true (false else never evaluated)
-        if (true_count > max_true)
+        if (true_count > max_true1)
         {
-            max_true = true_count;
+            max_true1 = true_count;
             max_true_end = loop_increment - 1;
         }
-        max_true_start = max_true_end - max_true + 1;
+        max_true_start = max_true_end - max_true1 + 1;
 
-        // this for loop is only fro visualization
+        // this for loop is only for visualization
         // true and false segments (green and red)
+        /*
         for (int i = 0; i < loop_increment; i++)
         {
             if (search_results[i])
@@ -138,15 +151,19 @@ public:
                 hpoints[(cell_num_y / 2 + i - loop_increment / 2) * cell_num_x] = -128;
             }
         }
+        */
 
         // RCLCPP_INFO_STREAM(this->get_logger(), "max_true: " << max_true << " max_true_start: " << max_true_start << " max_true_end: " << max_true_end);
         int max_true_center = (max_true_start + max_true_end) / 2;
         max_true_angle = -0.5 * search_range + search_start_mid + double(max_true_center) * search_resolution;
 
-        double x_end = x_start + search_length * cos(max_true_angle);
-        double y_end = y_start + search_length * sin(max_true_angle);
-        PointXY p_end = PointXY(x_end, y_end);
-        return p_end;
+        double x_end = s.x_start + s.search_length * cos(max_true_angle);
+        double y_end = s.y_start + s.search_length * sin(max_true_angle);
+        PointXYori p_end = PointXYori(x_end, y_end, max_true_angle);
+        std::vector<PointXYori> p_end_vector;
+        p_end_vector.push_back(p_end);
+        // TODO: return the second longest segment center as well
+        return p_end_vector;
     }
 };
 

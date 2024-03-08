@@ -10,7 +10,17 @@ public:
   PointXY() : x(0), y(0) {} // Default constructor
   // initialize with x and y
   PointXY(double x_val, double y_val) : x(x_val), y(y_val) {}
+}; 
+// X, Y and orientation
+class PointXYori : public PointXY
+{
+public:
+  double ori;
+  PointXYori() : ori(0) {} // Default constructor
+  // initialize with x and y
+  PointXYori(double x_val, double y_val, double ori_val) : PointXY(x_val, y_val), ori(ori_val) {}
 };
+
 class PointXYZI
 {
 public:
