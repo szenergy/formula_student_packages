@@ -9,13 +9,13 @@
 #include <stack>
 #include "pointcloud_to_grid_core.hpp"
 
-class Node
+class TreeNode
 {
 public:
-    PointXY pos;
+    PointXYori pos;
     float prob = 0.5;
-    std::vector<Node *> children;
-    Node(PointXY pos) : pos(pos) {}
+    std::vector<TreeNode *> children;
+    TreeNode(PointXYori pos) : pos(pos) {}
 };
 
 class Tree
@@ -23,33 +23,33 @@ class Tree
 
 public:
     // create a root node and reserve memory for it
-    Node *root = new Node(PointXY(0.0, 0.0));
+    TreeNode *root = new TreeNode(PointXYori(0.0, 0.0, 0.0));
 
-    Node *getRoot()
+    TreeNode *getRoot()
     {
         return root;
     }
 
-    Node *modifyRoot(PointXY pos)
+    TreeNode *modifyRoot(PointXYori pos)
     {
         root->pos = pos;
         return root;
     }
 
-    Node *modifyNode(Node *node, PointXY pos)
+    TreeNode *modifyNode(TreeNode *node, PointXYori pos)
     {
         node->pos = pos;
         return node;
     }
 
-    Node *addNode(Node *parent, PointXY pos)
+    TreeNode *addNode(TreeNode *parent, PointXYori pos)
     {
-        Node *newNode = new Node(pos);
+        TreeNode *newNode = new TreeNode(pos);
         parent->children.push_back(newNode);
         return newNode;
     }
     // recursive function to visit all nodes in the tree
-    void printTree(Node *node, std::string indent = "")
+    void printTree(TreeNode *node, std::string indent = "")
     {
         if (node != nullptr)
         {
@@ -61,28 +61,52 @@ public:
             {
                 std::cout << indent << "(" << node->pos.x << ", " << node->pos.y << ")" << std::endl;
             }
-            for (Node *child : node->children)
+            for (TreeNode *child : node->children)
             {
-                Node *father = node;
+                TreeNode *father = node;
                 std::cout << "[" << father->pos.x << ", " << father->pos.y << "] ";
                 printTree(child, indent + "->");
             }
         }
     }
+    // a recursive function to return all the leaves of the tree as a node
+    std::vector<TreeNode*> getLeaves(TreeNode* node)
+    {
+        std::vector<TreeNode*> leaves;
+
+        if (node != nullptr)
+        {
+            if (node->children.empty())
+            {
+                leaves.push_back(node);
+            }
+            else
+            {
+                for (TreeNode* child : node->children)
+                {
+                    std::vector<TreeNode*> childLeaves = getLeaves(child);
+                    leaves.insert(leaves.end(), childLeaves.begin(), childLeaves.end());
+                }
+            }
+        }
+
+        return leaves;
+    }
+
     // alternative way to print (and walk thru) the whole tree (non-recursive)
-    void printTreeAlt(Node *root)
+    void printTreeAlt(TreeNode *root)
     {
         if (root == nullptr)
         {
             return;
         }
 
-        std::stack<Node *> stack;
+        std::stack<TreeNode *> stack;
         stack.push(root);
 
         while (!stack.empty())
         {
-            Node *node = stack.top();
+            TreeNode *node = stack.top();
             stack.pop();
 
             if (node != root)
@@ -90,7 +114,7 @@ public:
                 std::cout << "(" << node->pos.x << ", " << node->pos.y << ")" << std::endl;
             }
 
-            for (Node *child : node->children)
+            for (TreeNode *child : node->children)
             {
                 std::cout << "[" << node->pos.x << ", " << node->pos.y << "] ";
                 stack.push(child);
@@ -99,7 +123,7 @@ public:
     }
 
     // recursive function to visualize the tree in rviz
-    void markerTree(Node *node, visualization_msgs::msg::Marker &line1_marker, std::string indent = "")
+    void markerTree(TreeNode *node, visualization_msgs::msg::Marker &line1_marker, std::string indent = "")
     {
         if (node != nullptr)
         {
@@ -115,9 +139,9 @@ public:
                 p_node.z = 0.0;
                 line1_marker.points.push_back(p_node);
             }
-            for (Node *child : node->children)
+            for (TreeNode *child : node->children)
             {
-                Node *father = node;
+                TreeNode *father = node;
                 geometry_msgs::msg::Point p_father;
                 p_father.x = father->pos.x;
                 p_father.y = father->pos.y;

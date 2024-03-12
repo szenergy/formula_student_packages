@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+// #include "rclcpp/rclcpp.hpp"
 
 class SearchConfig
 {
@@ -90,7 +91,7 @@ public:
         return true;
     }
 
-    std::vector<PointXYori> angualar_search(SearchConfig s, std::vector<signed char> &hpoints, double &max_true_angle)
+    std::vector<PointXYori> angular_search(SearchConfig s, std::vector<signed char> &hpoints, double &max_true_angle)
     {
         double search_range = s.search_range_deg * M_PI / 180;
         double search_resolution = s.search_resolution_deg * M_PI / 180;
@@ -159,10 +160,17 @@ public:
 
         double x_end = s.x_start + s.search_length * cos(max_true_angle);
         double y_end = s.y_start + s.search_length * sin(max_true_angle);
-        PointXYori p_end = PointXYori(x_end, y_end, max_true_angle);
+        PointXYori p_end = PointXYori(x_end, y_end, max_true_angle * 180 / M_PI);
         std::vector<PointXYori> p_end_vector;
         p_end_vector.push_back(p_end);
         // TODO: return the second longest segment center as well
+        // TODO: remove this test:
+        // if (max_true_end - max_true_start < 90){
+        //     double r_x_end = s.search_length * cos(max_true_angle);
+        //     double r_y_end = s.search_length * sin(max_true_angle);
+        //     PointXYori r_end = PointXYori(r_x_end, r_y_end, max_true_start * 180 / M_PI);
+        //     p_end_vector.push_back(r_end);
+        // }
         return p_end_vector;
     }
 };
