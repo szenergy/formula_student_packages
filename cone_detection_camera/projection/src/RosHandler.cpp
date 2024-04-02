@@ -1,14 +1,12 @@
 #include "RosHandler.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/transform_listener.h>
 
 RosHandler::RosHandler() : Node("cone_projection"){
     this->sub_coords = this->create_subscription<std_msgs::msg::Float32MultiArray>(
         "cone_coordinates", 1, std::bind(&RosHandler::float32_callback, this,std::placeholders::_1)
     );
     
-
-    this->horizon_height_range_int.set__from_value(0).set__to_value(376).set__step(1);
-    this->descriptor.integer_range= {horizon_height_range_int};
-
     this->pub_coords = this->create_publisher<std_msgs::msg::Float32MultiArray>("pub_proj_coords", 1);
     this->pub_marker_array_yellow = this->create_publisher<visualization_msgs::msg::MarkerArray>("yellow_cones", 1);
     this->pub_marker_array_blue = this->create_publisher<visualization_msgs::msg::MarkerArray>("blue_cones", 1);
@@ -46,25 +44,52 @@ void RosHandler::float32_callback(const std_msgs::msg::Float32MultiArray& msg){
     markerPoint.color.a = 1.0;
     int yellow_id = 1;
     int blue_id = 2;
+
+    tf2::BufferCore tf_buffer;
+    geometry_msgs::msg::TransformStamped zed_camera_front_to_other_frame;
+    tf2_ros::TransformListener tf2_listener(tf_buffer);
+
+    try
+    {
+        zed_camera_front_to_other_frame = tf_buffer.lookupTransform("laser_sensor_frame", "base_link",  tf2::TimePointZero);
+        }
+    catch(tf2::TransformException &ex)
+    {
+        printf("transform not found\n");
+    }
     
     for(unsigned int i=0; i<msg.layout.dim.size(); i++){
         ProjectionHandler::get().doProjection(new Cone(int(msg.data[i*5]), int(msg.data[i*5+1]), int(msg.data[i*5+2]), msg.data[i*5+3]));
         //ProjectionHandler::get().doProjection(new Cone(1, 157, 324, 30.0f));
 
+        printf("number of cones %ld\n", msg.layout.dim.size());
         // This check is enough
         if(!ProjectionHandler::get().getCurParticle()) { continue; }
+
+        geometry_msgs::msg::Pose conePose;
+
+        conePose.position.x = ProjectionHandler::get().getCurParticle()->getPosition().getX()/100;
+        conePose.position.y = ProjectionHandler::get().getCurParticle()->getPosition().getY()/100;
+        conePose.position.z = 0.0;
+        conePose.orientation.x = 0.0;
+        conePose.orientation.y = 0.0;
+        conePose.orientation.z = 0.0;
+        conePose.orientation.w = 1.0;
+
+        tf2::doTransform(conePose, conePose, zed_camera_front_to_other_frame);
 
         // markerPoint.action = visualization_msgs::msg::Marker::MODIFY;
         markerPoint.type = visualization_msgs::msg::Marker::CYLINDER;
         markerPoint.action = visualization_msgs::msg::Marker::MODIFY;
-        markerPoint.header.frame_id = "base_link";
-        markerPoint.pose.position.x = ProjectionHandler::get().getCurParticle()->getPosition().getX()/100;
+        markerPoint.header.frame_id = "laser_sensor_frame";
+        markerPoint.pose = conePose;
+        /*markerPoint.pose.position.x = ProjectionHandler::get().getCurParticle()->getPosition().getX()/100;
         markerPoint.pose.position.y = ProjectionHandler::get().getCurParticle()->getPosition().getY()/100;
         markerPoint.pose.position.z = 0.0;
         markerPoint.pose.orientation.x = 0.0;
         markerPoint.pose.orientation.y = 0.0;
         markerPoint.pose.orientation.z = 0.0;
-        markerPoint.pose.orientation.w = 1.0;
+        markerPoint.pose.orientation.w = 1.0;*/
         markerPoint.lifetime = rclcpp::Duration::from_seconds(0.1);
 
         if(ProjectionHandler::get().getCurParticle()->getId()==1){

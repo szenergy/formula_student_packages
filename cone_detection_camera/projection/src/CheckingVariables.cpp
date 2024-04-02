@@ -2,13 +2,13 @@
 
 CheckingVariables* CheckingVariables::instance = 0;
 
-bool CheckingVariables::DISPLAY_INFO = false;
-int CheckingVariables::HORIZON_HEIGHT = 186;
-float CheckingVariables::FACTOR_HORIZONTAL = 100.0f;
-float CheckingVariables::FACTOR_VERTICAL = 150.0f;
-float CheckingVariables::BASE_WIDTH = 200.0f;
-float CheckingVariables::CONE_MIN_AREA = 5.0f;
-float CheckingVariables::DIST_MAX = 2000.0f;
+bool CheckingVariables::DISPLAY_INFO = true;
+int CheckingVariables::HORIZON_HEIGHT = 188;
+float CheckingVariables::FACTOR_HORIZONTAL = 220.0f;
+float CheckingVariables::FACTOR_VERTICAL = 70.0f;
+float CheckingVariables::BASE_WIDTH = 336.0f;
+float CheckingVariables::CONE_MIN_AREA = 20.0f;
+float CheckingVariables::DIST_MAX = 10000.0f;
 
 CheckingVariables::CheckingVariables()
 {
