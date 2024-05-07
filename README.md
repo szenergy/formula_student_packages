@@ -11,9 +11,10 @@ The proposed system architecture is shown below. The following considerations ar
 
 All components are to be developed in ROS 2 Humble.
 
-``` mermaid
+```mermaid
 flowchart TD
-    S[State Machine <br>/plan_state_machine] -.->|/plan_state*| LS[LIDAR segementation<br>/prcp_ground_obstacle_segm_lidar]
+    S[State Machine <br>/plan_state_machine] -.->|/plan_state*| LP[LIDAR pre filter<br>/prcp_lidar_filtered]
+    LP --> LS[LIDAR segementation<br>/prcp_ground_obstacle_segm_lidar]
     S -.-> CS[Cone detection camera<br> and de-projection]
     S -.-> O[Object fusion]
     CS -->|/prcp_obj_list_camera| O
@@ -31,13 +32,12 @@ flowchart TD
     classDef white fill:#ffffff,stroke:#152742,stroke-width:2px,color:#15274
     classDef dash fill:#ffffff,stroke:#152742,stroke-width:2px,color:#15274, stroke-dasharray: 5 5
     classDef red fill:#ef4638,stroke:#152742,stroke-width:2px,color:#fff
-    class CS,LS,L,T,M,C white
+    class CS,LS,LP,L,T,M,C white
     class O light
     class S dash
     class CAN red
  ``` 
 
-![Architecture](img/arch.png)
 
 
 # Clone and build
@@ -57,15 +57,15 @@ git clone https://github.com/szenergy/formula_student_packages
 ## Build
 
 ``` bash
-cd ~/ros2_ws 
-```
-
-``` bash
 sudo apt install ros-humble-pcl-ros
 ```
 
 ``` bash
-colcon build --symlink-install --packages-select formula_student_bringup cone_detection_lidar
+cd ~/ros2_ws 
+```
+
+``` bash
+colcon build --symlink-install --packages-select formula_student_bringup cone_detection_lidar cone_detection_camera lidar_pre_filter
 ```
 
 ## Run
@@ -82,6 +82,9 @@ ros2 launch cone_detection_lidar detection_simple.launch.py
 ```
 
 ## Directory structure
+
+> [!CAUTION]
+> If you move the packages to another directory, you need delete the build and install directories and rebuild the packages.
 
 ``` r
 ~/ros2_ws/src/
