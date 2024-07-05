@@ -110,33 +110,50 @@ std::vector<std::pair<double, double>> generateConePoints(const std::vector<std:
   double accumulated_distance = 0.0;
 
   for (size_t i = 0; i < track_points.size() - 1; ++i) {
-    double x1 = track_points[i].first;
-    double y1 = track_points[i].second;
-    double x2 = track_points[i + 1].first;
-    double y2 = track_points[i + 1].second;
-
-    // Direction vector
-    double dx = x2 - x1;
-    double dy = y2 - y1;
-    double segment_length = std::sqrt(dx * dx + dy * dy);
-
-    // Normal vector
-    double nx = -dy / segment_length;
-    double ny = dx / segment_length;
-
-    accumulated_distance += segment_length;
-
-    // Place cones at regular intervals
-    while (accumulated_distance >= cone_spacing) {
-      double t = cone_spacing / accumulated_distance;
-      double cx = x1 + t * dx;
-      double cy = y1 + t * dy;
-
-      cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny);
-      cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny);
-
-      accumulated_distance -= cone_spacing;
-    }
+      double x1 = track_points[i].first;
+      double y1 = track_points[i].second;
+      double x2 = track_points[i + 1].first;
+      double y2 = track_points[i + 1].second;
+  
+      // Direction vector
+      double dx = x2 - x1;
+      double dy = y2 - y1;
+      double segment_length = std::sqrt(dx * dx + dy * dy);
+  
+      // Normal vector
+      double nx = -dy / segment_length;
+      double ny = dx / segment_length;
+  
+      // Calculate curvature by comparing the angle between consecutive segments
+      double curvature = 1.0; // Default curvature
+      if (i > 0) {
+          double x0 = track_points[i - 1].first;
+          double y0 = track_points[i - 1].second;
+          double dx1 = x1 - x0;
+          double dy1 = y1 - y0;
+          double segment_length1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+  
+          double dot_product = (dx1 * dx + dy1 * dy) / (segment_length1 * segment_length);
+          double angle = std::acos(dot_product);
+          curvature = std::abs(angle); // Higher angle means higher curvature
+      }
+  
+      // Adjust cone spacing based on curvature
+      double adjusted_cone_spacing = cone_spacing / (1.0 + curvature*15);
+  
+      accumulated_distance += segment_length;
+  
+      // Place cones at regular intervals
+      while (accumulated_distance >= adjusted_cone_spacing) {
+          double t = adjusted_cone_spacing / accumulated_distance;
+          double cx = x1 + t * dx;
+          double cy = y1 + t * dy;
+  
+          cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny);
+          cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny);
+  
+          accumulated_distance -= adjusted_cone_spacing;
+      }
   }
 
   // Generate noise points outside the track
