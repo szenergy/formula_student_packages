@@ -12,7 +12,6 @@
 #include "pcl/filters/crop_box.h"
 #include <math.h> // to have M_PI
 
-
 // Helper function to generate a random double within a given range
 double dRand(double min, double max, std::default_random_engine& generator) {
     std::uniform_real_distribution<double> distribution(min, max);
@@ -103,10 +102,9 @@ std::vector<std::pair<double, double>> interpolateSpline(const std::vector<std::
     return interpolated_points;
 }
 
-
 // Function to generate cone points around the racetrack
-std::vector<std::pair<double, double>> generateConePoints(const std::vector<std::pair<double, double>>& track_points, double cone_spacing, double cone_distance, int num_noise_points, double max_noise_distance) {
-  std::vector<std::pair<double, double>> cone_points;
+std::vector<std::tuple<double, double, int>> generateConePoints(const std::vector<std::pair<double, double>>& track_points, double cone_spacing, double cone_distance, int num_noise_points, double max_noise_distance) {
+  std::vector<std::tuple<double, double, int>> cone_points;
   double accumulated_distance = 0.0;
 
   for (size_t i = 0; i < track_points.size() - 1; ++i) {
@@ -149,8 +147,8 @@ std::vector<std::pair<double, double>> generateConePoints(const std::vector<std:
           double cx = x1 + t * dx;
           double cy = y1 + t * dy;
   
-          cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny);
-          cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny);
+          cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny, 1); // Inner cone
+          cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny, 2); // Outer cone
   
           accumulated_distance -= adjusted_cone_spacing;
       }
@@ -190,7 +188,7 @@ std::vector<std::pair<double, double>> generateConePoints(const std::vector<std:
       }
 
       if (valid_point) {
-        cone_points.emplace_back(candidate_x, candidate_y);
+        cone_points.emplace_back(candidate_x, candidate_y, 0); // Noise points with intensity 0
       }
     }
   }
@@ -307,7 +305,6 @@ class LidarConeSim : public rclcpp::Node {
         return result;
     }
 
-
 public:
   LidarConeSim() : Node("lidar_cone_sim"), current_index_(0) {
     this->declare_parameter("track_keypoints", track_keypoints_);
@@ -404,12 +401,11 @@ private:
     // Update the position of cones relative to the "racecar" at the origin
     for (size_t i = 0; i < cones_.size(); ++i) {
         int idx = (current_index_ + i) % cones_.size();
-        auto [new_x, new_y, new_z] = rotatePoint(cones_[idx].first - x1, cones_[idx].second - y1);
+        auto [new_x, new_y, new_z] = rotatePoint(std::get<0>(cones_[idx]) - x1, std::get<1>(cones_[idx]) - y1);
         cloud->points[i].x = new_x;
         cloud->points[i].y = -new_y;
         cloud->points[i].z = new_z;
-        // add intensity 1 to all points
-        cloud->points[i].intensity = 300.0;
+        cloud->points[i].intensity = std::get<2>(cones_[idx]); // Set intensity based on inner (1) or outer (2) cone
     }
 
     // Update the current index
@@ -490,8 +486,7 @@ private:
     // Publish the centerline marker
     marker_array.markers.push_back(line_strip);
     pub_centerline->publish(marker_array);
-}
-
+  }
 
   // ROS2 publishers and timer
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar;
@@ -502,7 +497,7 @@ private:
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
   std::vector<std::pair<double, double>> track_points_;
-  std::vector<std::pair<double, double>> cones_;
+  std::vector<std::tuple<double, double, int>> cones_;
   std::vector<std::pair<double, double>> centerline_points_;
   size_t current_index_;
 
@@ -526,8 +521,6 @@ private:
   double crop_minY_ = -15.0;
   double crop_maxX_ = 15.0;
   double crop_maxY_ = 15.0;
-
-
 };
 
 int main(int argc, char *argv[]) {
