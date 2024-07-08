@@ -91,10 +91,8 @@ class FliterVehicle : public rclcpp::Node
             
             else if (param.get_name() == "crop_box_array")
             {
-                std::string tempstr = "crop_box_array...";
                 crop_box_array = param.get_value<std::vector<double>>();
-                //todo: nice info msg
-                RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+                printcfg();
             }
             else
             {
@@ -147,6 +145,7 @@ public:
 
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
+        printcfg();
 
     }
 
@@ -186,23 +185,11 @@ private:
         if (!(crop_box_array.size() % 6))   //sanity check
         {
             crop_boxes.resize(crop_box_array.size() / 6);
-            std::cerr << crop_box_array[0];
             int s = crop_box_array.size() / 6;
-            RCLCPP_INFO_ONCE(this->get_logger(),
-                "BoxFilter parameters:\n#\t minX\t maxX\t minY\t maxY\t minZ\t maxZ\n");
             int j;
             for (int i = 0; i < s; i++) //per crop box
             {
                 j = i*6;
-                //RCLCPP_INFO(this->get_logger(),       //debug: swap w/ line below
-                RCLCPP_INFO_ONCE(this->get_logger(),    //todo: once PER ROW!
-                    "\n%d\t%+7.2f\t%+7.2f\t%+7.2f\t%+7.2f\t%+7.2f\t%+7.2f\n", i,
-                    passvec[j],     //minX
-                    passvec[j+1],   //maxX
-                    passvec[j+2],   //minY
-                    passvec[j+3],   //maxY
-                    passvec[j+4],   //minZ
-                    passvec[j+5]);  //maxZ
                 crop_boxes[i] = new pcl::CropBox<pcl::PointXYZI>;
                 if (!i) crop_boxes[i]->setInputCloud(cloud);        //first time (original cloud)
                 else crop_boxes[i]->setInputCloud(cloud_cropped);   //repeat on previous result
@@ -211,13 +198,8 @@ private:
                 crop_boxes[i]->setNegative(true);
                 crop_boxes[i]->filter(*cloud_cropped);
             }
-            RCLCPP_INFO_ONCE(this->get_logger(), "---");    //todo: proper layout (one msg, newline per row)
         }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(), "ERROR: Incorrect number of Crop Box parameters! \
-                (Should be a multiple of 6: minX, maxX, minY, maxY, minZ, maxZ)");  //todo: test
-        }
+        else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
 
         // Convert to ROS data type
         sensor_msgs::msg::PointCloud2 output_msg;
@@ -240,6 +222,37 @@ private:
     bool verbose1 = false;
     bool verbose2 = true;
     size_t count_;
+    const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
+                " (should be a multiple of 6: minX, maxX, minY, maxY, minZ, maxZ)";
+
+    void printcfg()
+    {
+        int s = crop_box_array.size();
+        if (s % 6)
+            RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+        else
+        {   
+            std::string tempstr = "BoxFilter parameters:"
+                "\n#\t minX\t maxX\t minY\t maxY\t minZ\t maxZ";
+            char* buff = new char[52];  //line length is 52 in this format
+            for (int i = 0; i < s; i += 6)
+            {
+                snprintf(buff, 52,
+                    "\n%d\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f",
+                    i / 6,
+                    crop_box_array[i],     //minX
+                    crop_box_array[i+1],   //maxX
+                    crop_box_array[i+2],   //minY
+                    crop_box_array[i+3],   //maxY
+                    crop_box_array[i+4],   //minZ
+                    crop_box_array[i+5]);  //maxZ
+                    tempstr += buff;
+            }
+            tempstr += "\n-----";
+            RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+            delete[] buff;
+        }
+    }
 };
 
 int main(int argc, char *argv[])
