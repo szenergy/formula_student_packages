@@ -12,7 +12,6 @@
 #include "pcl/filters/crop_box.h"
 #include <math.h> // to have M_PI
 
-
 // Helper function to generate a random double within a given range
 double dRand(double min, double max, std::default_random_engine& generator) {
     std::uniform_real_distribution<double> distribution(min, max);
@@ -103,40 +102,56 @@ std::vector<std::pair<double, double>> interpolateSpline(const std::vector<std::
     return interpolated_points;
 }
 
-
 // Function to generate cone points around the racetrack
-std::vector<std::pair<double, double>> generateConePoints(const std::vector<std::pair<double, double>>& track_points, double cone_spacing, double cone_distance, int num_noise_points, double max_noise_distance) {
-  std::vector<std::pair<double, double>> cone_points;
+std::vector<std::tuple<double, double, int>> generateConePoints(const std::vector<std::pair<double, double>>& track_points, double cone_spacing, double cone_distance, int num_noise_points, double max_noise_distance) {
+  std::vector<std::tuple<double, double, int>> cone_points;
   double accumulated_distance = 0.0;
 
   for (size_t i = 0; i < track_points.size() - 1; ++i) {
-    double x1 = track_points[i].first;
-    double y1 = track_points[i].second;
-    double x2 = track_points[i + 1].first;
-    double y2 = track_points[i + 1].second;
-
-    // Direction vector
-    double dx = x2 - x1;
-    double dy = y2 - y1;
-    double segment_length = std::sqrt(dx * dx + dy * dy);
-
-    // Normal vector
-    double nx = -dy / segment_length;
-    double ny = dx / segment_length;
-
-    accumulated_distance += segment_length;
-
-    // Place cones at regular intervals
-    while (accumulated_distance >= cone_spacing) {
-      double t = cone_spacing / accumulated_distance;
-      double cx = x1 + t * dx;
-      double cy = y1 + t * dy;
-
-      cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny);
-      cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny);
-
-      accumulated_distance -= cone_spacing;
-    }
+      double x1 = track_points[i].first;
+      double y1 = track_points[i].second;
+      double x2 = track_points[i + 1].first;
+      double y2 = track_points[i + 1].second;
+  
+      // Direction vector
+      double dx = x2 - x1;
+      double dy = y2 - y1;
+      double segment_length = std::sqrt(dx * dx + dy * dy);
+  
+      // Normal vector
+      double nx = -dy / segment_length;
+      double ny = dx / segment_length;
+  
+      // Calculate curvature by comparing the angle between consecutive segments
+      double curvature = 1.0; // Default curvature
+      if (i > 0) {
+          double x0 = track_points[i - 1].first;
+          double y0 = track_points[i - 1].second;
+          double dx1 = x1 - x0;
+          double dy1 = y1 - y0;
+          double segment_length1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+  
+          double dot_product = (dx1 * dx + dy1 * dy) / (segment_length1 * segment_length);
+          double angle = std::acos(dot_product);
+          curvature = std::abs(angle); // Higher angle means higher curvature
+      }
+  
+      // Adjust cone spacing based on curvature
+      double adjusted_cone_spacing = cone_spacing / (1.0 + curvature*15);
+  
+      accumulated_distance += segment_length;
+  
+      // Place cones at regular intervals
+      while (accumulated_distance >= adjusted_cone_spacing) {
+          double t = adjusted_cone_spacing / accumulated_distance;
+          double cx = x1 + t * dx;
+          double cy = y1 + t * dy;
+  
+          cone_points.emplace_back(cx + cone_distance * nx, cy + cone_distance * ny, 1); // Inner cone
+          cone_points.emplace_back(cx - cone_distance * nx, cy - cone_distance * ny, 2); // Outer cone
+  
+          accumulated_distance -= adjusted_cone_spacing;
+      }
   }
 
   // Generate noise points outside the track
@@ -173,7 +188,7 @@ std::vector<std::pair<double, double>> generateConePoints(const std::vector<std:
       }
 
       if (valid_point) {
-        cone_points.emplace_back(candidate_x, candidate_y);
+        cone_points.emplace_back(candidate_x, candidate_y, 0); // Noise points with intensity 0
       }
     }
   }
@@ -290,7 +305,6 @@ class LidarConeSim : public rclcpp::Node {
         return result;
     }
 
-
 public:
   LidarConeSim() : Node("lidar_cone_sim"), current_index_(0) {
     this->declare_parameter("track_keypoints", track_keypoints_);
@@ -371,24 +385,27 @@ private:
     double y2 = track_points_[(current_index_ + 1) % track_points_.size()].second;
     double angle = atan2(y1 - y2, x1 - x2); // Reverse direction
 
-    // Function to rotate a point around the origin
+    // Function to rotate a point around the origin by -angle and then 90 degrees around y-axis
     auto rotatePoint = [angle](double x, double y) {
-      double cos_angle = cos(-angle);
-      double sin_angle = sin(-angle);
-      double new_x = x * cos_angle - y * sin_angle;
-      double new_y = x * sin_angle + y * cos_angle;
-      return std::make_pair(new_x, new_y);
+        double cos_angle = cos(-angle);
+        double sin_angle = sin(-angle);
+        double new_x = x * cos_angle - y * sin_angle;
+        double new_y = x * sin_angle + y * cos_angle;
+        // Rotate 90 degrees around y-axis (z becomes x, x becomes -z)
+        double rotated_x = -new_y;
+        double rotated_y = new_x;
+        double rotated_z = 0.0;
+        return std::make_tuple(rotated_x, rotated_y, rotated_z);
     };
 
     // Update the position of cones relative to the "racecar" at the origin
     for (size_t i = 0; i < cones_.size(); ++i) {
-      int idx = (current_index_ + i) % cones_.size();
-      auto rotated_point = rotatePoint(cones_[idx].first - x1, cones_[idx].second - y1);
-      cloud->points[i].x = rotated_point.first;
-      cloud->points[i].y = rotated_point.second;
-      cloud->points[i].z = -0.3;
-      // add intensity 1 to all points
-      cloud->points[i].intensity = 300.0;
+        int idx = (current_index_ + i) % cones_.size();
+        auto [new_x, new_y, new_z] = rotatePoint(std::get<0>(cones_[idx]) - x1, std::get<1>(cones_[idx]) - y1);
+        cloud->points[i].x = new_x;
+        cloud->points[i].y = -new_y;
+        cloud->points[i].z = new_z;
+        cloud->points[i].intensity = std::get<2>(cones_[idx]); // Set intensity based on inner (1) or outer (2) cone
     }
 
     // Update the current index
@@ -401,11 +418,8 @@ private:
     output_msg.is_dense = true;
     pub_lidar->publish(output_msg);
 
-
-    // Publich a second pointcloud, with cropped points to simulate "visible" cones
-    //make copy of cloud, as PointXYZ
-
-    // New cloud for conversion
+    // Publish a second pointcloud, with cropped points to simulate "visible" cones
+    // Make copy of cloud, as PointXYZ
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz(new pcl::PointCloud<pcl::PointXYZ>);
 
     // Convert pcl::PointXYZI to pcl::PointXYZ
@@ -417,7 +431,7 @@ private:
         cloud_xyz->push_back(point);
     }
 
-    // create cloud to store the cropped points
+    // Create cloud to store the cropped points
     pcl::PointCloud<pcl::PointXYZ>::Ptr cropped_pointcloud(new pcl::PointCloud<pcl::PointXYZ>);
     cropped_pointcloud->header.frame_id = lidar_frame_;
 
@@ -427,8 +441,7 @@ private:
     crop.setMax(Eigen::Vector4f(crop_maxX_, crop_maxY_, 5.0, 1.0));
     crop.filter(*cropped_pointcloud);
 
-
-    // publish in vis_lidar
+    // Publish in vis_lidar
     sensor_msgs::msg::PointCloud2 output_msg_cropped;
     pcl::toROSMsg(*cropped_pointcloud, output_msg_cropped);
     output_msg_cropped.header.stamp = this->now();
@@ -450,32 +463,29 @@ private:
     line_strip.color.g = 0.0;
     line_strip.color.b = 0.0;
     line_strip.color.a = 1.0;
+    line_strip.pose.position.z = 1.0;
 
     // Add the centerline points to the line strip marker
     for (const auto& point : centerline_points_) {
-      auto rotated_point = rotatePoint(point.first - x1, point.second - y1);
-      geometry_msgs::msg::Point p;
-      p.x = rotated_point.first;
-      p.y = rotated_point.second;
-      p.z = 0.1;
-      line_strip.points.push_back(p);
+        auto [new_x, new_y, new_z] = rotatePoint(point.first - x1, point.second - y1);
+        geometry_msgs::msg::Point p;
+        p.x = new_x;
+        p.y = -new_y;
+        p.z = new_z;
+        line_strip.points.push_back(p);
     }
 
-    // draw a line from the last point to the first point
-    auto rotated_point = rotatePoint(centerline_points_[0].first - x1, centerline_points_[0].second - y1);
+    // Draw a line from the last point to the first point
+    auto [first_x, first_y, first_z] = rotatePoint(centerline_points_[0].first - x1, centerline_points_[0].second - y1);
     geometry_msgs::msg::Point p;
-    p.x = rotated_point.first;
-    p.y = rotated_point.second;
-    p.z = 0.1;
+    p.x = first_x;
+    p.y = -first_y;
+    p.z = first_z;
     line_strip.points.push_back(p);
-
 
     // Publish the centerline marker
     marker_array.markers.push_back(line_strip);
     pub_centerline->publish(marker_array);
-
-
-
   }
 
   // ROS2 publishers and timer
@@ -487,7 +497,7 @@ private:
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
   std::vector<std::pair<double, double>> track_points_;
-  std::vector<std::pair<double, double>> cones_;
+  std::vector<std::tuple<double, double, int>> cones_;
   std::vector<std::pair<double, double>> centerline_points_;
   size_t current_index_;
 
@@ -511,8 +521,6 @@ private:
   double crop_minY_ = -15.0;
   double crop_maxX_ = 15.0;
   double crop_maxY_ = 15.0;
-
-
 };
 
 int main(int argc, char *argv[]) {
