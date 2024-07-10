@@ -9,13 +9,15 @@ import os
 def generate_launch_description():
 
     return LaunchDescription([
-        DeclareLaunchArgument("topic", description="a pointcloud topic to process", default_value="nonground"),
+        DeclareLaunchArgument("cloud_topic", description="a pointcloud topic to process", default_value="nonground"),
+        DeclareLaunchArgument("cones_topic", description="a marker array topic to process", default_value="yellow_cones"),
         Node(
             package='lidar_pre_filter',
             executable='filter_vehicle',
             output='screen',
             parameters=[
-                {'cloud_in_topic': LaunchConfiguration("topic")},
+                {'cloud_in_topic': LaunchConfiguration("cloud_topic")},
+                {'cam_cones_topic': LaunchConfiguration("cones_topic")},
                 {'verbose1': False},
                 {'verbose2': False},
                 {'minX_over': -220.0},

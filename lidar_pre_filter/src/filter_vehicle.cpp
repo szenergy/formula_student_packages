@@ -5,6 +5,7 @@
 // ROS
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 // PCL
 #include <pcl/point_cloud.h>
@@ -28,6 +29,10 @@ class FliterVehicle : public rclcpp::Node
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << param.get_value<std::string>());
             }
+            if (param.get_name() == "cam_cones_topic")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << param.get_value<std::string>());
+            }
             else if (param.get_name() == "verbose1")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "verbose1: " << param.get_value<bool>());
@@ -37,6 +42,16 @@ class FliterVehicle : public rclcpp::Node
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "verbose2: " << param.get_value<bool>());
                 verbose2 = param.get_value<bool>();
+            }
+            else if (param.get_name() == "toggle_box_filter")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "toggle_box_filter: " << param.get_value<bool>());
+                toggle_box_filter = param.get_value<bool>();
+            }
+            else if (param.get_name() == "toggle_cam_filter")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "toggle_cam_filter: " << param.get_value<bool>());
+                toggle_cam_filter = param.get_value<bool>();
             }
             else if (param.get_name() == "minX_over")
             {
@@ -94,6 +109,11 @@ class FliterVehicle : public rclcpp::Node
                 crop_box_array = param.get_value<std::vector<double>>();
                 printcfg();
             }
+            else if (param.get_name() == "cam_cone_radius")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "cam_cone_radius: " << param.get_value<float>());
+                cam_cone_radius = param.get_value<float>();
+            }
             else
             {
                 result.successful = false;
@@ -108,8 +128,11 @@ public:
     {
         // parameters
         this->declare_parameter<std::string>("cloud_in_topic", "input_cloud");
+        this->declare_parameter<std::string>("cam_cones_topic", "input_cones");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
+        this->declare_parameter<bool>("toggle_box_filter", true);
+        this->declare_parameter<bool>("toggle_cam_filter", false);
         this->declare_parameter<float>("minX_over", -200.0);
         this->declare_parameter<float>("minY_over", -25.0);
         this->declare_parameter<float>("minZ_over", -2.0);
@@ -122,10 +145,14 @@ public:
         this->declare_parameter<float>("maxY_vehicle", 5.0);
         this->declare_parameter<std::vector<double>>("crop_box_array",
             std::vector<double>{-1.2, 1.2, -1.2, 1.2, -1.2, 1.2});
+        this->declare_parameter<float>("cam_cone_radius", 0.5);
 
         this->get_parameter("cloud_in_topic", cloud_in_topic);
+        this->get_parameter("cam_cones_topic", cam_cones_topic);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
+        this->get_parameter("toggle_box_filter", toggle_box_filter);
+        this->get_parameter("toggle_cam_filter", toggle_cam_filter);
         this->get_parameter("minX_over", minX_over);
         this->get_parameter("minY_over", minY_over);
         this->get_parameter("minZ_over", minZ_over);
@@ -137,14 +164,17 @@ public:
         this->get_parameter("maxX_vehicle", maxX_vehicle);
         this->get_parameter("maxY_vehicle", maxY_vehicle);
         this->get_parameter("crop_box_array", crop_box_array);
+        this->get_parameter("cam_cone_radius", cam_cone_radius);
 
 
         pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
+        sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::cam_cones_callback, this, std::placeholders::_1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&FliterVehicle::parametersCallback, this, std::placeholders::_1));
 
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
+        RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << this->get_parameter("cam_cones_topic").as_string());
         printcfg();
 
     }
@@ -152,6 +182,9 @@ public:
 private:
     void lidar_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr input_msg)
     {
+        RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s",
+            (toggle_box_filter ? "ON" : "OFF"));
+        if (!toggle_box_filter) return;
         // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
 
         // Filter point cloud data
@@ -210,17 +243,33 @@ private:
         pub_lidar_->publish(output_msg);
     }
 
+    void cam_cones_callback(const visualization_msgs::msg::MarkerArray::ConstSharedPtr markers_in)
+    {
+        RCLCPP_INFO_ONCE(this->get_logger(), "First CamCone input recieved, CamFilter is turned %s",
+            (toggle_cam_filter ? "ON" : "OFF"));
+        if (!toggle_cam_filter) return;
+        std::vector<geometry_msgs::msg::Point> pts;
+        //todo: everything
+        RCLCPP_INFO_STREAM(this->get_logger(), "[cam_cone_filter] TESTING!"
+            "(Let's pretend that something is happening here...)");
+    }
+
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_cam_cones_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     std::string cloud_in_topic = "pointcloud_topic";
+    std::string cam_cones_topic = "cone_coordinates";
     float minX_over = -10.0, minY_over = -5.0, minZ_over = -2.0;
     float maxX_over = +10.0, maxY_over = +5.0, maxZ_over = -0.15;
     float minX_vehicle = -5.0, minY_vehicle = -5.0;
     float maxX_vehicle = +5.0, maxY_vehicle = +5.0;
     std::vector<double> crop_box_array = {-0.8, 0.8, -0.8, 0.8, -0.8, 0.8};
+    float cam_cone_radius = 0.5;
     bool verbose1 = false;
     bool verbose2 = true;
+    bool toggle_box_filter = true;
+    bool toggle_cam_filter = false;
     size_t count_;
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
                 " (should be a multiple of 6: minX, maxX, minY, maxY, minZ, maxZ)";
