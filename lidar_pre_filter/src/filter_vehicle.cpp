@@ -165,9 +165,17 @@ public:
         this->get_parameter("maxY_vehicle", maxY_vehicle);
         this->get_parameter("crop_box_array", crop_box_array);
         this->get_parameter("cam_cone_radius", cam_cone_radius);
-
+/*
+        rclcpp::TimerBase::SharedPtr timer =
+            this->create_wall_timer(50ms, std::bind(&FliterVehicle::timer_callback, this));
+        for (float i = -15; i < 0; i += 0.25)
+            for (float j = -7; j < 7; j += 0.25)
+                for (float k = -1.5; k < 1.5; k += 0.5)
+                    test_cloud.points.push_back(pcl::PointXYZI(i,j,k,1.0));
+*/
 
         pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
+        //pub_testcloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("testcloud", 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
         sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::cam_cones_callback, this, std::placeholders::_1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&FliterVehicle::parametersCallback, this, std::placeholders::_1));
@@ -193,6 +201,8 @@ private:
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_over(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_vehicle(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud_cropped;
         pcl::CropBox<pcl::PointXYZI> crop_over, crop_vehicle;   //todo: use or clean up?
         std::vector<pcl::CropBox<pcl::PointXYZI>*> crop_boxes;  //todo: single variable OR implement parallelism
 
@@ -234,27 +244,74 @@ private:
         }
         else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
 
+        if (toggle_cam_filter)
+        {
+            int s = cloud_cropped->points.size();
+            int c = cones.size();
+            float x, y, r,
+                rs = cam_cone_radius * cam_cone_radius;
+            for (int i = 0; i < s; i++)     //for every point
+            {
+                for (int j = 0; j < c; j++) //for every cone
+                {
+                    x = cones[j].x - cloud_cropped->points[i].x;
+                    y = cones[j].y - cloud_cropped->points[i].y;
+                    r = x * x + y * y;  //squared distance
+                    if (r < rs)         //no need for sqrt() for comparison
+                    {
+                        //RCLCPP_INFO(this->get_logger(), "\n%d\t%f\t%f\t\t%f\t%f\t%f", j, cones[j].x, cones[j].y, x, y, r);
+                        cloud_cones->points.push_back(cloud_cropped->points[i]);
+                        break;  //avoid duplicates (and unnecessary computations)
+                    }
+                }
+            }
+            output_cloud = cloud_cones;
+        }
+        
         // Convert to ROS data type
         sensor_msgs::msg::PointCloud2 output_msg;
-        pcl::toROSMsg(*cloud_cropped, output_msg);
-        // Add the same frame_id as th input, it is not included in pcl PointXYZI
+        pcl::toROSMsg(*output_cloud, output_msg);
+        // Add the same frame_id as the input, it is not included in pcl PointXYZI
         output_msg.header.frame_id = input_msg->header.frame_id;
         // Publish the data as a ROS message
         pub_lidar_->publish(output_msg);
+        RCLCPP_INFO_STREAM(this->get_logger(), output_cloud->points.size());
     }
-
+/*
+    void timer_callback()
+    {
+        sensor_msgs::msg::PointCloud2 test_msg;
+        pcl::toROSMsg(test_cloud, test_msg);
+        test_msg.header.frame_id = "laser_data_frame";
+        rclcpp::Time now = this->get_clock()->now();
+        test_msg.header.stamp = now;
+        pub_testcloud_->publish(test_msg);
+    }
+*/
     void cam_cones_callback(const visualization_msgs::msg::MarkerArray::ConstSharedPtr markers_in)
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First CamCone input recieved, CamFilter is turned %s",
             (toggle_cam_filter ? "ON" : "OFF"));
         if (!toggle_cam_filter) return;
-        std::vector<geometry_msgs::msg::Point> pts;
-        //todo: everything
-        RCLCPP_INFO_STREAM(this->get_logger(), "[cam_cone_filter] TESTING!"
-            "(Let's pretend that something is happening here...)");
+
+        int s = markers_in->markers.size();
+        cones.clear();
+        pcl::PointXY tempoint;
+        for (int i = 0; i < s; i++)
+        {
+            tempoint.x = -markers_in->markers[i].pose.position.x;   //todo: proper transform
+            tempoint.y = -markers_in->markers[i].pose.position.y;
+            if ((tempoint.x < -0.001 || tempoint.x > +0.001) &&
+                (tempoint.y < -0.001 || tempoint.y > +0.001))
+                cones.push_back(tempoint);
+            //RCLCPP_INFO(this->get_logger(), "\n%d\t%f\t%f", i, tempoint.x, tempoint.y);
+        }
+        //RCLCPP_INFO(this->get_logger(), "---");
+        //timer_callback(); //temp
     }
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar_;
+    //rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_testcloud_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_cam_cones_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
@@ -302,6 +359,8 @@ private:
             delete[] buff;
         }
     }
+    std::vector<pcl::PointXY> cones;
+    //pcl::PointCloud<pcl::PointXYZI> test_cloud;
 };
 
 int main(int argc, char *argv[])
