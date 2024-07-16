@@ -204,7 +204,7 @@ private:
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud_cropped;
         pcl::CropBox<pcl::PointXYZI> crop_over, crop_vehicle;   //todo: use or clean up?
-        std::vector<pcl::CropBox<pcl::PointXYZI>*> crop_boxes;  //todo: single variable OR implement parallelism
+        pcl::CropBox<pcl::PointXYZI>* crop_box;
 
         //remnant? --->
         crop_over.setInputCloud(cloud);
@@ -227,19 +227,19 @@ private:
         for (int i=crop_box_array.size()-1; i>=0; i--) passvec[i] = crop_box_array[i];
         if (!(crop_box_array.size() % 6))   //sanity check
         {
-            crop_boxes.resize(crop_box_array.size() / 6);
             int s = crop_box_array.size() / 6;
             int j;
             for (int i = 0; i < s; i++) //per crop box
             {
                 j = i*6;
-                crop_boxes[i] = new pcl::CropBox<pcl::PointXYZI>;
-                if (!i) crop_boxes[i]->setInputCloud(cloud);        //first time (original cloud)
-                else crop_boxes[i]->setInputCloud(cloud_cropped);   //repeat on previous result
-                crop_boxes[i]->setMin(Eigen::Vector4f(passvec[j], passvec[j+2], passvec[j+4], 1.0));
-                crop_boxes[i]->setMax(Eigen::Vector4f(passvec[j+1], passvec[j+3], passvec[j+5], 1.0));
-                crop_boxes[i]->setNegative(true);
-                crop_boxes[i]->filter(*cloud_cropped);
+                crop_box = new pcl::CropBox<pcl::PointXYZI>;
+                if (!i) crop_box->setInputCloud(cloud);        //first time (original cloud)
+                else crop_box->setInputCloud(cloud_cropped);   //repeat on previous result
+                crop_box->setMin(Eigen::Vector4f(passvec[j], passvec[j+2], passvec[j+4], 1.0));
+                crop_box->setMax(Eigen::Vector4f(passvec[j+1], passvec[j+3], passvec[j+5], 1.0));
+                crop_box->setNegative(true);
+                crop_box->filter(*cloud_cropped);
+                delete crop_box;
             }
         }
         else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
