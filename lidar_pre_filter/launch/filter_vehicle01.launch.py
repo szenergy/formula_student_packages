@@ -11,6 +11,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("cloud_topic", description="a pointcloud topic to process", default_value="nonground"),
         DeclareLaunchArgument("cones_topic", description="a marker array topic to process", default_value="yellow_cones"),
+        DeclareLaunchArgument("out_frame", description="output frame", default_value="base_link"),
         Node(
             package='lidar_pre_filter',
             executable='filter_vehicle',
@@ -18,6 +19,7 @@ def generate_launch_description():
             parameters=[
                 {'cloud_in_topic': LaunchConfiguration("cloud_topic")},
                 {'cam_cones_topic': LaunchConfiguration("cones_topic")},
+                {'output_frame': LaunchConfiguration("out_frame")},
                 {'verbose1': False},
                 {'verbose2': False},
                 {'minX_over': -220.0},
@@ -38,6 +40,8 @@ def generate_launch_description():
                     -0.6, -0.15, -0.3, 0.3, 0.4, 1.0,       # seat
                     -1.35, -0.5, -0.25, 0.25, 0.4, 1.0,     # pilot
                 ]},
+                {'toggle_box_filter': True},
+                {'toggle_cam_filter': True},
             ]
         )
 

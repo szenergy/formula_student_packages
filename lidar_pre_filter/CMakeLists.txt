@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED) 
 # uncomment the following section in order to fill in
@@ -22,6 +23,7 @@ set(INCLUDE_DIRS
   ${rclcpp_INCLUDE_DIRS}
   ${sensor_msgs_INCLUDE_DIRS}
   ${visualization_msgs_INCLUDE_DIRS}
+  ${geometry_msgs_INCLUDE_DIRS}
   ${pcl_ros_INCLUDE_DIRS} 
   ${pcl_conversions_INCLUDE_DIRS}
 )
@@ -31,7 +33,9 @@ set(ament_dependencies
   rclcpp
   sensor_msgs
   visualization_msgs
+  geometry_msgs
   pcl_conversions
+  pcl_ros
   PCL
 )
 

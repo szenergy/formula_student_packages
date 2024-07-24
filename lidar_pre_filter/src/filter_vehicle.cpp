@@ -12,6 +12,10 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/crop_box.h>
+// TF
+#include <pcl_ros/transforms.hpp>
+#include <geometry_msgs/msg/transform_stamped.h>
+#include "tf2_ros/transform_listener.h"
 
 using namespace std::chrono_literals;
 
@@ -32,6 +36,10 @@ class FliterVehicle : public rclcpp::Node
             if (param.get_name() == "cam_cones_topic")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << param.get_value<std::string>());
+            }
+            if (param.get_name() == "output_frame")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "output_frame: " << param.get_value<std::string>());
             }
             else if (param.get_name() == "verbose1")
             {
@@ -129,10 +137,11 @@ public:
         // parameters
         this->declare_parameter<std::string>("cloud_in_topic", "input_cloud");
         this->declare_parameter<std::string>("cam_cones_topic", "input_cones");
+        this->declare_parameter<std::string>("output_frame", "base_link");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
         this->declare_parameter<bool>("toggle_box_filter", true);
-        this->declare_parameter<bool>("toggle_cam_filter", false);
+        this->declare_parameter<bool>("toggle_cam_filter", true);
         this->declare_parameter<float>("minX_over", -200.0);
         this->declare_parameter<float>("minY_over", -25.0);
         this->declare_parameter<float>("minZ_over", -2.0);
@@ -149,6 +158,7 @@ public:
 
         this->get_parameter("cloud_in_topic", cloud_in_topic);
         this->get_parameter("cam_cones_topic", cam_cones_topic);
+        this->get_parameter("output_frame", output_frame);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
         this->get_parameter("toggle_box_filter", toggle_box_filter);
@@ -174,8 +184,11 @@ public:
                     test_cloud.points.push_back(pcl::PointXYZI(i,j,k,1.0));
 */
 
+        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
         pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
-        //pub_testcloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("testcloud", 10);
+//        pub_testcloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("testcloud", 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
         sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::cam_cones_callback, this, std::placeholders::_1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&FliterVehicle::parametersCallback, this, std::placeholders::_1));
@@ -194,10 +207,28 @@ private:
             (toggle_box_filter ? "ON" : "OFF"));
         if (!toggle_box_filter) return;
         // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
-
+        
+        //ROS2 msg - temporarily holds input after transformation, then the final output at the end
+        sensor_msgs::msg::PointCloud2 output_msg;
+        // TF
+        if (input_msg->header.frame_id != output_frame)
+        {
+            try
+            {
+                tf = tf_buffer_->lookupTransform(output_frame, input_msg->header.frame_id, tf2::TimePointZero);
+                pcl_ros::transformPointCloud(output_frame, tf, *input_msg, output_msg);
+            }
+            catch (const tf2::TransformException & ex)
+            {
+                RCLCPP_ERROR_ONCE(
+                    this->get_logger(), "[PCL TF] Could not transform %s to %s: %s",
+                    input_msg->header.frame_id.c_str(), output_frame.c_str(), ex.what());
+                return;
+            }
+        }
         // Filter point cloud data
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::fromROSMsg(*input_msg, *cloud);
+        pcl::fromROSMsg(output_msg, *cloud);   //output_msg is the transformed input at this point
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_over(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_vehicle(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
@@ -224,19 +255,17 @@ private:
         // Array-based crop box! (multiple boxes, sequential filtering)
         std::vector<float> passvec; //temp - todo: proper conversion instead?
         passvec.resize(crop_box_array.size());
-        for (int i=crop_box_array.size()-1; i>=0; i--) passvec[i] = crop_box_array[i];
+        for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
         if (!(crop_box_array.size() % 6))   //sanity check
         {
             int s = crop_box_array.size() / 6;
-            int j;
-            for (int i = 0; i < s; i++) //per crop box
+            for (int i = 0; i < s; i += 6) //per crop box
             {
-                j = i*6;
                 crop_box = new pcl::CropBox<pcl::PointXYZI>;
                 if (!i) crop_box->setInputCloud(cloud);        //first time (original cloud)
                 else crop_box->setInputCloud(cloud_cropped);   //repeat on previous result
-                crop_box->setMin(Eigen::Vector4f(passvec[j], passvec[j+2], passvec[j+4], 1.0));
-                crop_box->setMax(Eigen::Vector4f(passvec[j+1], passvec[j+3], passvec[j+5], 1.0));
+                crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+2], passvec[i+4], 1.0));
+                crop_box->setMax(Eigen::Vector4f(passvec[i+1], passvec[i+3], passvec[i+5], 1.0));
                 crop_box->setNegative(true);
                 crop_box->filter(*cloud_cropped);
                 delete crop_box;
@@ -254,12 +283,11 @@ private:
             {
                 for (int j = 0; j < c; j++) //for every cone
                 {
-                    x = cones[j].x - cloud_cropped->points[i].x;
-                    y = cones[j].y - cloud_cropped->points[i].y;
+                    x = cones[j].x - cloud_cropped->points[i].x;    //delta x
+                    y = cones[j].y - cloud_cropped->points[i].y;    //delta y
                     r = x * x + y * y;  //squared distance
                     if (r < rs)         //no need for sqrt() for comparison
                     {
-                        //RCLCPP_INFO(this->get_logger(), "\n%d\t%f\t%f\t\t%f\t%f\t%f", j, cones[j].x, cones[j].y, x, y, r);
                         cloud_cones->points.push_back(cloud_cropped->points[i]);
                         break;  //avoid duplicates (and unnecessary computations)
                     }
@@ -267,15 +295,11 @@ private:
             }
             output_cloud = cloud_cones;
         }
-        
-        // Convert to ROS data type
-        sensor_msgs::msg::PointCloud2 output_msg;
-        pcl::toROSMsg(*output_cloud, output_msg);
+        pcl::toROSMsg(*output_cloud, output_msg);   //output_msg is the final output msg now
         // Add the same frame_id as the input, it is not included in pcl PointXYZI
-        output_msg.header.frame_id = input_msg->header.frame_id;
-        // Publish the data as a ROS message
-        pub_lidar_->publish(output_msg);
-        RCLCPP_INFO_STREAM(this->get_logger(), output_cloud->points.size());
+        output_msg.header.frame_id = output_frame;
+        pub_lidar_->publish(output_msg);    // Publish the cloud data as a ROS message
+        //RCLCPP_INFO_STREAM(this->get_logger(), output_cloud->points.size());
     }
 /*
     void timer_callback()
@@ -283,8 +307,7 @@ private:
         sensor_msgs::msg::PointCloud2 test_msg;
         pcl::toROSMsg(test_cloud, test_msg);
         test_msg.header.frame_id = "laser_data_frame";
-        rclcpp::Time now = this->get_clock()->now();
-        test_msg.header.stamp = now;
+        test_msg.header.stamp = this->get_clock()->now();
         pub_testcloud_->publish(test_msg);
     }
 */
@@ -292,31 +315,83 @@ private:
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First CamCone input recieved, CamFilter is turned %s",
             (toggle_cam_filter ? "ON" : "OFF"));
+//        timer_callback(); //temp
         if (!toggle_cam_filter) return;
-
         int s = markers_in->markers.size();
+        /*  //TF (should not be needed)
+        double tfx = 0; //x component of translation
+        double tfy = 0; //y component of translation
+        double tfs = 0; //sine component of rotation
+        double tfc = 1; //cosine component of rotation
+        */
+        if (s)
+        {
+            if (markers_in->markers[0].header.frame_id != output_frame)
+            {
+                RCLCPP_ERROR_ONCE(this->get_logger(),
+                    "[Cam TF] Marker frame does not match output frame! (%s)\n",
+                    output_frame.c_str());
+                //return;
+                /*  //TF (should not be needed)
+                try
+                {
+                    tf = tf_buffer_->lookupTransform(output_frame, markers_in->markers[0].header.frame_id, tf2::TimePointZero);
+                    tfx = tf.transform.translation.x;
+                    tfy = tf.transform.translation.y;
+                    geometry_msgs::msg::Quaternion q = tf.transform.rotation;
+                    //some 3D->2D quaternion magic
+                    tfs = 2 * (q.w * q.z + q.x * q.y);      //sine componenet of rot matrix coeff
+                    tfc = 1 - 2 * (q.y * q.y + q.z * q.z);  //cosine component od rot matrix coeff
+                }
+                catch (const tf2::TransformException & ex)
+                {
+                    RCLCPP_ERROR_ONCE(
+                        this->get_logger(), "[Cam TF] Could not transform %s to %s: %s"
+                        "Turning CamFilter OFF! (can be turned back on via param)",
+                        markers_in->markers[0].header.frame_id.c_str(), output_frame.c_str(), ex.what());
+                        //toggle_cam_filter = false;
+                        //this->set_parameter(rclcpp::Parameter("toggle_cam_filter", false));
+                    return;
+                }
+                */
+            }
+        }
         cones.clear();
         pcl::PointXY tempoint;
+        float eps = 0.001;
         for (int i = 0; i < s; i++)
         {
-            tempoint.x = -markers_in->markers[i].pose.position.x;   //todo: proper transform
-            tempoint.y = -markers_in->markers[i].pose.position.y;
-            if ((tempoint.x < -0.001 || tempoint.x > +0.001) &&
-                (tempoint.y < -0.001 || tempoint.y > +0.001))
-                cones.push_back(tempoint);
+            tempoint.x = markers_in->markers[i].pose.position.x;
+            tempoint.y = markers_in->markers[i].pose.position.y;
+            if ((tempoint.x > -eps && tempoint.x < +eps) &&
+                (tempoint.y > -eps && tempoint.y < +eps))
+                continue;   //if ~zero: ignore
+            //TF (should not be needed)
+            /*
+            //translation + rotation (rot matrix coefficients)
+            tempoint.y = tfy + ( tfs * tempoint.x + tfc * tempoint.y );
+            tempoint.x = tfx + ( tfc * tempoint.x - tfs * markers_in->markers[i].pose.position.y ); 
+            //                                            ^ (tempoint.y got overwritten)
+            */
+            cones.push_back(tempoint);
             //RCLCPP_INFO(this->get_logger(), "\n%d\t%f\t%f", i, tempoint.x, tempoint.y);
         }
         //RCLCPP_INFO(this->get_logger(), "---");
-        //timer_callback(); //temp
     }
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar_;
-    //rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_testcloud_;
+//    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_testcloud_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_cam_cones_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     std::string cloud_in_topic = "pointcloud_topic";
     std::string cam_cones_topic = "cone_coordinates";
+    std::string output_frame = "base_link";
+
+    geometry_msgs::msg::TransformStamped tf;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+
     float minX_over = -10.0, minY_over = -5.0, minZ_over = -2.0;
     float maxX_over = +10.0, maxY_over = +5.0, maxZ_over = -0.15;
     float minX_vehicle = -5.0, minY_vehicle = -5.0;
@@ -326,7 +401,7 @@ private:
     bool verbose1 = false;
     bool verbose2 = true;
     bool toggle_box_filter = true;
-    bool toggle_cam_filter = false;
+    bool toggle_cam_filter = true;
     size_t count_;
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
                 " (should be a multiple of 6: minX, maxX, minY, maxY, minZ, maxZ)";
@@ -360,7 +435,7 @@ private:
         }
     }
     std::vector<pcl::PointXY> cones;
-    //pcl::PointCloud<pcl::PointXYZI> test_cloud;
+//    pcl::PointCloud<pcl::PointXYZI> test_cloud;
 };
 
 int main(int argc, char *argv[])
