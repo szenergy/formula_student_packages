@@ -178,9 +178,9 @@ public:
 /*
         rclcpp::TimerBase::SharedPtr timer =
             this->create_wall_timer(50ms, std::bind(&FliterVehicle::timer_callback, this));
-        for (float i = -15; i < 0; i += 0.25)
-            for (float j = -7; j < 7; j += 0.25)
-                for (float k = -1.5; k < 1.5; k += 0.5)
+        for (float i = -3; i < 1; i += 0.05)
+            for (float j = -1; j < 1; j += 0.05)
+                for (float k = -1; k < 1; k += 0.05)
                     test_cloud.points.push_back(pcl::PointXYZI(i,j,k,1.0));
 */
 
@@ -258,12 +258,12 @@ private:
         for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
         if (!(crop_box_array.size() % 6))   //sanity check
         {
-            int s = crop_box_array.size() / 6;
+            int s = crop_box_array.size();
             for (int i = 0; i < s; i += 6) //per crop box
             {
                 crop_box = new pcl::CropBox<pcl::PointXYZI>;
-                if (!i) crop_box->setInputCloud(cloud);        //first time (original cloud)
-                else crop_box->setInputCloud(cloud_cropped);   //repeat on previous result
+                if (!i) crop_box->setInputCloud(cloud);         //first time (original cloud)
+                else crop_box->setInputCloud(cloud_cropped);    //repeat on previous result
                 crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+2], passvec[i+4], 1.0));
                 crop_box->setMax(Eigen::Vector4f(passvec[i+1], passvec[i+3], passvec[i+5], 1.0));
                 crop_box->setNegative(true);
