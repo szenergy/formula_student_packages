@@ -32,13 +32,14 @@ def generate_launch_description():
                 {'maxX_vehicle': 2.0},
                 {'minY_vehicle': -2.0},
                 {'maxY_vehicle': 2.0},
-                {'crop_box_array': [    # from base link, [xyz = bwd-left-up]
-                    -2.35, -0.25, -0.35, 0.35, -0.25, 0.45, # main body
-                    -1.2, -0.5, -0.6, 0.6, -0.25, 0.2,      # side parts
-                    -0.25, 0.25, -0.7, 0.7, -0.25, 0.25,    # rear wheels
-                    -1.8, -1.2, -0.8, 0.8, -0.25, 0.25,     # front wheels
-                    -0.6, -0.15, -0.3, 0.3, 0.4, 1.0,       # seat
-                    -1.35, -0.5, -0.25, 0.25, 0.4, 1.0,     # pilot
+                {'crop_box_array': [
+                #   minX    maxX    minY    maxY    minZ    maxZ
+                    0.25,   2.35,   -0.35,  0.35,   -0.25,  0.45,   # main body
+                    0.5,    1.2,    -0.6,   0.6,    -0.25,  0.2,    # side parts
+                    -0.25,  0.25,   -0.7,   0.7,    -0.25,  0.25,   # rear wheels
+                    1.2,    1.8,    -0.8,   0.8,    -0.25,  0.25,   # front wheels
+                    0.15,   0.6,    -0.3,   0.3,    0.4,    1.0,    # seat
+                    0.5,    1.35,   -0.25,  0.25,   0.4,    1.0,    # pilot
                 ]},
                 {'toggle_box_filter': True},
                 {'toggle_cam_filter': True},
