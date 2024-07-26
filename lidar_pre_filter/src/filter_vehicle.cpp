@@ -205,77 +205,79 @@ private:
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s",
             (toggle_box_filter ? "ON" : "OFF"));
-        if (!toggle_box_filter) return;
-        // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
-        
-        //ROS2 msg - temporarily holds input after transformation, then the final output at the end
-        sensor_msgs::msg::PointCloud2 output_msg;
-        // TF
-        if (input_msg->header.frame_id != output_frame)
-        {
-            try
+            // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
+            
+            //ROS2 msg - temporarily holds input after transformation, then the final output at the end
+            sensor_msgs::msg::PointCloud2 output_msg;
+            // TF
+            if (input_msg->header.frame_id != output_frame)
             {
-                tf = tf_buffer_->lookupTransform(output_frame, input_msg->header.frame_id, tf2::TimePointZero);
-                pcl_ros::transformPointCloud(output_frame, tf, *input_msg, output_msg);
+                try
+                {
+                    tf = tf_buffer_->lookupTransform(output_frame, input_msg->header.frame_id, tf2::TimePointZero);
+                    pcl_ros::transformPointCloud(output_frame, tf, *input_msg, output_msg);
+                }
+                catch (const tf2::TransformException & ex)
+                {
+                    RCLCPP_ERROR_ONCE(
+                        this->get_logger(), "[PCL TF] Could not transform %s to %s: %s",
+                        input_msg->header.frame_id.c_str(), output_frame.c_str(), ex.what());
+                    return;
+                }
             }
-            catch (const tf2::TransformException & ex)
-            {
-                RCLCPP_ERROR_ONCE(
-                    this->get_logger(), "[PCL TF] Could not transform %s to %s: %s",
-                    input_msg->header.frame_id.c_str(), output_frame.c_str(), ex.what());
-                return;
-            }
-        }
-        // Filter point cloud data
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::fromROSMsg(output_msg, *cloud);   //output_msg is the transformed input at this point
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_over(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_vehicle(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud_cropped;
-        pcl::CropBox<pcl::PointXYZI> crop_over, crop_vehicle;   //todo: use or clean up?
-        pcl::CropBox<pcl::PointXYZI>* crop_box;
-
-        //remnant? --->
-        crop_over.setInputCloud(cloud);
-        // Filter out points outside of the box
-        crop_over.setMin(Eigen::Vector4f(minX_over, minY_over, minZ_over, 1.0));
-        crop_over.setMax(Eigen::Vector4f(maxX_over, maxY_over, maxZ_over, 1.0));
-        crop_over.filter(*cloud_over);
-        
-        crop_vehicle.setInputCloud(cloud_over);
-        // Filter out points inside of the box -- Negative
-        crop_vehicle.setMin(Eigen::Vector4f(minX_vehicle, minY_vehicle, minZ_over, 1.0));
-        crop_vehicle.setMax(Eigen::Vector4f(maxX_vehicle, maxY_vehicle, maxZ_over, 1.0));
-        crop_vehicle.setNegative(true);
-        crop_vehicle.filter(*cloud_vehicle);
-        // <--- remnant?
-
-        // Array-based crop box! (multiple boxes, sequential filtering)
-        std::vector<float> passvec; //temp - todo: proper conversion instead?
-        passvec.resize(crop_box_array.size());
-        for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
-        if (!(crop_box_array.size() % 6))   //sanity check
+        pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud;
+        if (toggle_box_filter)
         {
-            int s = crop_box_array.size();
-            for (int i = 0; i < s; i += 6) //per crop box
-            {
-                crop_box = new pcl::CropBox<pcl::PointXYZI>;
-                if (!i) crop_box->setInputCloud(cloud);         //first time (original cloud)
-                else crop_box->setInputCloud(cloud_cropped);    //repeat on previous result
-                crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+2], passvec[i+4], 1.0));
-                crop_box->setMax(Eigen::Vector4f(passvec[i+1], passvec[i+3], passvec[i+5], 1.0));
-                crop_box->setNegative(true);
-                crop_box->filter(*cloud_cropped);
-                delete crop_box;
-            }
-        }
-        else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+            // Filter point cloud data
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_over(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_vehicle(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::CropBox<pcl::PointXYZI> crop_over, crop_vehicle;   //todo: use or clean up?
+            pcl::CropBox<pcl::PointXYZI>* crop_box;
 
+            //remnant? --->
+            crop_over.setInputCloud(cloud);
+            // Filter out points outside of the box
+            crop_over.setMin(Eigen::Vector4f(minX_over, minY_over, minZ_over, 1.0));
+            crop_over.setMax(Eigen::Vector4f(maxX_over, maxY_over, maxZ_over, 1.0));
+            crop_over.filter(*cloud_over);
+            
+            crop_vehicle.setInputCloud(cloud_over);
+            // Filter out points inside of the box -- Negative
+            crop_vehicle.setMin(Eigen::Vector4f(minX_vehicle, minY_vehicle, minZ_over, 1.0));
+            crop_vehicle.setMax(Eigen::Vector4f(maxX_vehicle, maxY_vehicle, maxZ_over, 1.0));
+            crop_vehicle.setNegative(true);
+            crop_vehicle.filter(*cloud_vehicle);
+            // <--- remnant?
+
+            // Array-based crop box! (multiple boxes, sequential filtering)
+            std::vector<float> passvec; //temp - todo: proper conversion instead?
+            passvec.resize(crop_box_array.size());
+            for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
+            if (!(crop_box_array.size() % 6))   //sanity check
+            {
+                int s = crop_box_array.size();
+                for (int i = 0; i < s; i += 6) //per crop box
+                {
+                    crop_box = new pcl::CropBox<pcl::PointXYZI>;
+                    if (!i) crop_box->setInputCloud(cloud);         //first time (original cloud)
+                    else crop_box->setInputCloud(cloud_cropped);    //repeat on previous result
+                    crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+2], passvec[i+4], 1.0));
+                    crop_box->setMax(Eigen::Vector4f(passvec[i+1], passvec[i+3], passvec[i+5], 1.0));
+                    crop_box->setNegative(true);
+                    crop_box->filter(*cloud_cropped);
+                    delete crop_box;
+                }
+                output_cloud = cloud_cropped;
+            }
+            else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+        }
         if (toggle_cam_filter)
         {
-            int s = cloud_cropped->points.size();
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
+            int s = output_cloud->points.size();
             int c = cones.size();
             float x, y, r,
                 rs = cam_cone_radius * cam_cone_radius;
@@ -283,12 +285,12 @@ private:
             {
                 for (int j = 0; j < c; j++) //for every cone
                 {
-                    x = cones[j].x - cloud_cropped->points[i].x;    //delta x
-                    y = cones[j].y - cloud_cropped->points[i].y;    //delta y
+                    x = cones[j].x - output_cloud->points[i].x;    //delta x
+                    y = cones[j].y - output_cloud->points[i].y;    //delta y
                     r = x * x + y * y;  //squared distance
                     if (r < rs)         //no need for sqrt() for comparison
                     {
-                        cloud_cones->points.push_back(cloud_cropped->points[i]);
+                        cloud_cones->points.push_back(output_cloud->points[i]);
                         break;  //avoid duplicates (and unnecessary computations)
                     }
                 }
