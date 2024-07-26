@@ -22,25 +22,20 @@ def generate_launch_description():
                 {'output_frame': LaunchConfiguration("out_frame")},
                 {'verbose1': False},
                 {'verbose2': False},
-                {'minX_over': -220.0},
-                {'maxX_over': 220.0},
-                {'minY_over': -220.0},
-                {'maxY_over': 220.0},
-                {'minZ_over': -10.0},
-                {'maxZ_over': -0.05},
-                {'minX_vehicle': -2.0},
-                {'maxX_vehicle': 2.0},
-                {'minY_vehicle': -2.0},
-                {'maxY_vehicle': 2.0},
+                #{'cloud_boundaries': [ # not implemented
+                ##   minX    minY    minZ    maxX    maxY    maxZ
+                #    -220.0, 220.0,  -220.0, 220.0,  -10.0,  5.0
+                #]},
                 {'crop_box_array': [
-                #   minX    maxX    minY    maxY    minZ    maxZ
-                    0.25,   2.35,   -0.35,  0.35,   -0.25,  0.45,   # main body
-                    0.5,    1.2,    -0.6,   0.6,    -0.25,  0.2,    # side parts
-                    -0.25,  0.25,   -0.7,   0.7,    -0.25,  0.25,   # rear wheels
-                    1.2,    1.8,    -0.8,   0.8,    -0.25,  0.25,   # front wheels
-                    0.15,   0.6,    -0.3,   0.3,    0.4,    1.0,    # seat
-                    0.5,    1.35,   -0.25,  0.25,   0.4,    1.0,    # pilot
+                #   minX    minY    minZ    maxX    maxY    maxZ
+                    0.25,   -0.35,  -0.25,  2.35,   0.35,   0.45,   # main body
+                    0.5,    -0.6,   -0.25,  1.2,    0.6,    0.2,    # side parts
+                    -0.25,  -0.7,   -0.25,  0.25,   0.7,    0.25,   # rear wheels
+                    1.2,    -0.8,   -0.25,  1.8,    0.8,    0.25,   # front wheels
+                    0.15,   -0.3,   0.4,    0.6,    0.3,    1.0,    # seat
+                    0.5,    -0.25,  0.4,    1.35,   0.25,   1.0,    # pilot
                 ]},
+                #{'toggle_boundary_trim': False}, # not implemented
                 {'toggle_box_filter': True},
                 {'toggle_cam_filter': True},
             ]

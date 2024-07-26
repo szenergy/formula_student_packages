@@ -51,6 +51,13 @@ class FliterVehicle : public rclcpp::Node
                 RCLCPP_INFO_STREAM(this->get_logger(), "verbose2: " << param.get_value<bool>());
                 verbose2 = param.get_value<bool>();
             }
+            /*
+            else if (param.get_name() == "toggle_boundary_trim")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "toggle_boundary_trim: " << param.get_value<bool>());
+                toggle_boundary_trim = param.get_value<bool>();
+            }
+            */
             else if (param.get_name() == "toggle_box_filter")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_box_filter: " << param.get_value<bool>());
@@ -61,57 +68,13 @@ class FliterVehicle : public rclcpp::Node
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_cam_filter: " << param.get_value<bool>());
                 toggle_cam_filter = param.get_value<bool>();
             }
-            else if (param.get_name() == "minX_over")
+            /*
+            else if (param.get_name() == "boundary_array")
             {
-                RCLCPP_INFO_STREAM(this->get_logger(), "minX_over: " << param.get_value<float>());
-                minX_over = param.get_value<float>();
+                crop_box_array = param.get_value<std::vector<double>>();
+                printcfg();
             }
-            else if (param.get_name() == "minY_over")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "minY_over: " << param.get_value<float>());
-                minY_over = param.get_value<float>();
-            }
-            else if (param.get_name() == "minZ_over")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "minZ_over: " << param.get_value<float>());
-                minZ_over = param.get_value<float>();
-            }
-            else if (param.get_name() == "maxX_over")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "maxX_over: " << param.get_value<float>());
-                maxX_over = param.get_value<float>();
-            }
-            else if (param.get_name() == "maxY_over")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "maxY_over: " << param.get_value<float>());
-                maxY_over = param.get_value<float>();
-            }
-            else if (param.get_name() == "maxZ_over")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "maxZ_over: " << param.get_value<float>());
-                maxZ_over = param.get_value<float>();
-            }
-            else if (param.get_name() == "minX_vehicle")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "minX_vehicle: " << param.get_value<float>());
-                minX_vehicle = param.get_value<float>();
-            }
-            else if (param.get_name() == "minY_vehicle")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "minY_vehicle: " << param.get_value<float>());
-                minY_vehicle = param.get_value<float>();
-            }
-            else if (param.get_name() == "maxX_vehicle")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "maxX_vehicle: " << param.get_value<float>());
-                maxX_vehicle = param.get_value<float>();
-            }
-            else if (param.get_name() == "maxY_vehicle")
-            {
-                RCLCPP_INFO_STREAM(this->get_logger(), "maxY_vehicle: " << param.get_value<float>());
-                maxY_vehicle = param.get_value<float>();
-            }
-            
+            */
             else if (param.get_name() == "crop_box_array")
             {
                 crop_box_array = param.get_value<std::vector<double>>();
@@ -140,20 +103,15 @@ public:
         this->declare_parameter<std::string>("output_frame", "base_link");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
+        //this->declare_parameter<bool>("toggle_boundary_trim", false);
         this->declare_parameter<bool>("toggle_box_filter", true);
         this->declare_parameter<bool>("toggle_cam_filter", true);
-        this->declare_parameter<float>("minX_over", -200.0);
-        this->declare_parameter<float>("minY_over", -25.0);
-        this->declare_parameter<float>("minZ_over", -2.0);
-        this->declare_parameter<float>("maxX_over", 200.0);
-        this->declare_parameter<float>("maxY_over", 25.0);
-        this->declare_parameter<float>("maxZ_over", -0.01);
-        this->declare_parameter<float>("minX_vehicle", -5.0);
-        this->declare_parameter<float>("minY_vehicle", -5.0);
-        this->declare_parameter<float>("maxX_vehicle", 5.0);
-        this->declare_parameter<float>("maxY_vehicle", 5.0);
+        /*
+        this->declare_parameter<std::vector<double>>("boundary_array",
+            std::vector<double>{-200.0, -25.0, -2.0, 200.0, 25.0, 2.0});
+        */
         this->declare_parameter<std::vector<double>>("crop_box_array",
-            std::vector<double>{-1.2, 1.2, -1.2, 1.2, -1.2, 1.2});
+            std::vector<double>{-1.2, -1.2, -1.2, 1.2, 1.2, 1.2});
         this->declare_parameter<float>("cam_cone_radius", 0.5);
 
         this->get_parameter("cloud_in_topic", cloud_in_topic);
@@ -161,18 +119,10 @@ public:
         this->get_parameter("output_frame", output_frame);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
+        //this->get_parameter("toggle_boundary_trim", toggle_boundary_trim);
         this->get_parameter("toggle_box_filter", toggle_box_filter);
         this->get_parameter("toggle_cam_filter", toggle_cam_filter);
-        this->get_parameter("minX_over", minX_over);
-        this->get_parameter("minY_over", minY_over);
-        this->get_parameter("minZ_over", minZ_over);
-        this->get_parameter("maxX_over", maxX_over);
-        this->get_parameter("maxY_over", maxY_over);
-        this->get_parameter("maxZ_over", maxZ_over);
-        this->get_parameter("minX_vehicle", minX_vehicle);
-        this->get_parameter("minY_vehicle", minY_vehicle);
-        this->get_parameter("maxX_vehicle", maxX_vehicle);
-        this->get_parameter("maxY_vehicle", maxY_vehicle);
+        //this->get_parameter("boundary_array", boundary_array);
         this->get_parameter("crop_box_array", crop_box_array);
         this->get_parameter("cam_cone_radius", cam_cone_radius);
 /*
@@ -189,8 +139,10 @@ public:
 
         pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
 //        pub_testcloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("testcloud", 10);
-        sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
-        sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic, rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::cam_cones_callback, this, std::placeholders::_1));
+        sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic,
+            rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
+        sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic,
+            rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::cam_cones_callback, this, std::placeholders::_1));
         callback_handle_ = this->add_on_set_parameters_callback(std::bind(&FliterVehicle::parametersCallback, this, std::placeholders::_1));
 
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
@@ -203,57 +155,52 @@ public:
 private:
     void lidar_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr input_msg)
     {
-        RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s",
-            (toggle_box_filter ? "ON" : "OFF"));
-            // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
-            
-            //ROS2 msg - temporarily holds input after transformation, then the final output at the end
-            sensor_msgs::msg::PointCloud2 output_msg;
-            // TF
-            if (input_msg->header.frame_id != output_frame)
-            {
-                try
-                {
-                    tf = tf_buffer_->lookupTransform(output_frame, input_msg->header.frame_id, tf2::TimePointZero);
-                    pcl_ros::transformPointCloud(output_frame, tf, *input_msg, output_msg);
-                }
-                catch (const tf2::TransformException & ex)
-                {
-                    RCLCPP_ERROR_ONCE(
-                        this->get_logger(), "[PCL TF] Could not transform %s to %s: %s",
-                        input_msg->header.frame_id.c_str(), output_frame.c_str(), ex.what());
-                    return;
-                }
-            }
+        RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s\n",
+            //"Trimming of the pointcloud at the boundaries is turned %s",
+            (toggle_box_filter ? "ON" : "OFF"));//, (toggle_boundary_trim ? "ON" : "OFF"));
+        // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
+        
+        //ROS2 msg - final output msg + temporarily holds input after transformation
+        sensor_msgs::msg::PointCloud2 output_msg;
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::fromROSMsg(output_msg, *cloud);   //output_msg is the transformed input at this point
         pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud;
+        // TF
+        if (input_msg->header.frame_id != output_frame)
+        {
+            try
+            {
+                tf = tf_buffer_->lookupTransform(output_frame, input_msg->header.frame_id, tf2::TimePointZero);
+                pcl_ros::transformPointCloud(output_frame, tf, *input_msg, output_msg);
+            }
+            catch (const tf2::TransformException & ex)
+            {
+                RCLCPP_ERROR_ONCE(
+                    this->get_logger(), "[PCL TF] Could not transform %s to %s: %s",
+                    input_msg->header.frame_id.c_str(), output_frame.c_str(), ex.what());
+                return;
+            }
+            pcl::fromROSMsg(output_msg, *cloud);    //output_msg is the transformed input at this point
+        }
+        else pcl::fromROSMsg(*input_msg, *cloud);   //let pcl through without transformation
+
         if (toggle_box_filter)
         {
-            // Filter point cloud data
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_over(new pcl::PointCloud<pcl::PointXYZI>);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_vehicle(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_trimmed(new pcl::PointCloud<pcl::PointXYZI>);
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
-            pcl::CropBox<pcl::PointXYZI> crop_over, crop_vehicle;   //todo: use or clean up?
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::CropBox<pcl::PointXYZI> crop_over;
             pcl::CropBox<pcl::PointXYZI>* crop_box;
 
-            //remnant? --->
+            // Filter out points outside of the box - UNUSED - might slightly improve performance
+            /*
             crop_over.setInputCloud(cloud);
-            // Filter out points outside of the box
             crop_over.setMin(Eigen::Vector4f(minX_over, minY_over, minZ_over, 1.0));
             crop_over.setMax(Eigen::Vector4f(maxX_over, maxY_over, maxZ_over, 1.0));
-            crop_over.filter(*cloud_over);
-            
-            crop_vehicle.setInputCloud(cloud_over);
-            // Filter out points inside of the box -- Negative
-            crop_vehicle.setMin(Eigen::Vector4f(minX_vehicle, minY_vehicle, minZ_over, 1.0));
-            crop_vehicle.setMax(Eigen::Vector4f(maxX_vehicle, maxY_vehicle, maxZ_over, 1.0));
-            crop_vehicle.setNegative(true);
-            crop_vehicle.filter(*cloud_vehicle);
-            // <--- remnant?
+            crop_over.filter(*cloud_trimmed);
+            */
 
             // Array-based crop box! (multiple boxes, sequential filtering)
-            std::vector<float> passvec; //temp - todo: proper conversion instead?
+            std::vector<float> passvec;
             passvec.resize(crop_box_array.size());
             for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
             if (!(crop_box_array.size() % 6))   //sanity check
@@ -262,10 +209,12 @@ private:
                 for (int i = 0; i < s; i += 6) //per crop box
                 {
                     crop_box = new pcl::CropBox<pcl::PointXYZI>;
-                    if (!i) crop_box->setInputCloud(cloud);         //first time (original cloud)
+                    if (!i) {
+                        if (true) crop_box->setInputCloud(cloud);   //first time (original cloud)
+                        else {} }                                   //trimmed input (todo?)
                     else crop_box->setInputCloud(cloud_cropped);    //repeat on previous result
-                    crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+2], passvec[i+4], 1.0));
-                    crop_box->setMax(Eigen::Vector4f(passvec[i+1], passvec[i+3], passvec[i+5], 1.0));
+                    crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+1], passvec[i+2], 1.0));
+                    crop_box->setMax(Eigen::Vector4f(passvec[i+3], passvec[i+4], passvec[i+5], 1.0));
                     crop_box->setNegative(true);
                     crop_box->filter(*cloud_cropped);
                     delete crop_box;
@@ -394,19 +343,17 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
-    float minX_over = -10.0, minY_over = -5.0, minZ_over = -2.0;
-    float maxX_over = +10.0, maxY_over = +5.0, maxZ_over = -0.15;
-    float minX_vehicle = -5.0, minY_vehicle = -5.0;
-    float maxX_vehicle = +5.0, maxY_vehicle = +5.0;
-    std::vector<double> crop_box_array = {-0.8, 0.8, -0.8, 0.8, -0.8, 0.8};
+    //std::vector<double> crop_boundary = {-10.0, -5.0, -2.0, 10.0, 5.0, 2.0};
+    std::vector<double> crop_box_array = {-0.8, -0.8, -0.8, 0.8, 0.8, 0.8};
     float cam_cone_radius = 0.5;
     bool verbose1 = false;
     bool verbose2 = true;
+    //bool toggle_boundary_trim = false;
     bool toggle_box_filter = true;
     bool toggle_cam_filter = true;
     size_t count_;
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
-                " (should be a multiple of 6: minX, maxX, minY, maxY, minZ, maxZ)";
+                " (should be a multiple of 6: minX, minY, minZ, maxX, maxY, maxZ)";
 
     void printcfg()
     {
@@ -416,7 +363,7 @@ private:
         else
         {   
             std::string tempstr = "BoxFilter parameters:"
-                "\n#\t minX\t maxX\t minY\t maxY\t minZ\t maxZ";
+                "\n#\t minX\t minY\t minZ\t maxX\t maxY\t maxZ";
             char* buff = new char[52];  //line length is 52 in this format
             for (int i = 0; i < s; i += 6)
             {
@@ -424,10 +371,10 @@ private:
                     "\n%d\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f",
                     i / 6,
                     crop_box_array[i],     //minX
-                    crop_box_array[i+1],   //maxX
-                    crop_box_array[i+2],   //minY
-                    crop_box_array[i+3],   //maxY
-                    crop_box_array[i+4],   //minZ
+                    crop_box_array[i+1],   //minY
+                    crop_box_array[i+2],   //minZ
+                    crop_box_array[i+3],   //maxX
+                    crop_box_array[i+4],   //maxY
                     crop_box_array[i+5]);  //maxZ
                     tempstr += buff;
             }
