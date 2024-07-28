@@ -4,7 +4,7 @@
 
 This software provides detection of different types of cones using YOLO algorithm and OpenCV.
 
-### YOLOv4-weights
+### YOLOv4-weights 
 
 To get the weight file of our trained yolov4 network click on this [link](https://drive.google.com/file/d/1dSa5awcMIEOK2zwG1s2N6ugHeZy95cPS/view?usp=sharing)
 This network works with the *.cfg* file on this [link](https://drive.google.com/file/d/1-4-Y6wrj2x9WsF6nbCKUrWHhc9pqTbvB/view?usp=sharing)
