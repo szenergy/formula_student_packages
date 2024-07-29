@@ -5,6 +5,8 @@ The code uses [markerarray]() and [odeometry]() (relative position and reorienta
 
 It can also receive and process data in [pointcloud2]() format with a small modification. It is still under development so there may be some non-functional parts and some bugs. 
 
+![alt text](d.png)
+
 ## Installation
 
 Copy the node inside the src folder to wherever you like. After that: 
@@ -45,6 +47,6 @@ self.legit_cone_hits = 1000 #idk what is this number :)
 self.freq_clean_db = 1 #It updates and cleans the database. 
 self.id_cone = 0
 self.default_x = 640113.5 #The odeometry in the mcap file starts from these values, so I subtract them to get a nice global map.  I know this is not a nice solution. 
-self.default_y = 5193671.0 #The odeometry in the mcap file starts from these values, so I subtract them to get a nice global map.  I know this is not a nice solution. 
+self.default_y = 5193671.0 #The odeometry in the mcap file starts from these values, so I subtract them to get a nice global map.  I know this is not a nice solution 😌. 
 self.distance = 0
 ```
