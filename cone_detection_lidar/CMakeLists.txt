@@ -63,6 +63,11 @@ target_link_libraries(grid_trajectory ${PCL_LIBRARIES})
 ament_target_dependencies(grid_trajectory  ${ament_dependencies} )
 target_compile_features(grid_trajectory PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
+add_executable(voronoi_grid src/voronoi_grid.cpp)
+target_link_libraries(voronoi_grid ${PCL_LIBRARIES})
+ament_target_dependencies(voronoi_grid  ${ament_dependencies} )
+target_compile_features(voronoi_grid PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
 install(DIRECTORY 
   launch
   config
@@ -71,6 +76,7 @@ install(DIRECTORY
 install(TARGETS 
   detection_simple
   grid_trajectory
+  voronoi_grid
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
