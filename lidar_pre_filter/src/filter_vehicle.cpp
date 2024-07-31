@@ -188,7 +188,7 @@ private:
             std::vector<float> passvec;
             passvec.resize(crop_boundary.size());
             for (int i = crop_boundary.size() - 1; i >= 0; i--) passvec[i] = crop_boundary[i];
-            if (!(passvec.size() % 6))          //sanity check
+            if (passvec.size() == 6)            //sanity check
             {
                 crop_over.setInputCloud(cloud);
                 crop_over.setMin(Eigen::Vector4f(passvec[0], passvec[1], passvec[2], 1.0));
@@ -196,7 +196,8 @@ private:
                 crop_over.filter(*cloud_trimmed);
                 output_cloud = cloud_trimmed;
             }
-            else RCLCPP_ERROR(this->get_logger(), "%s%s", "[Boundary Filter] ", ERROR_TEXT_PARAM_NUM);
+            else RCLCPP_ERROR(this->get_logger(), "[Boundary Filter] ERROR: 6 parameters expected!"
+                " (minX, minY, minZ, maxX, maxY, maxZ <-> %ld recieved)", passvec.size());
         }
         if (toggle_box_filter)
         {
@@ -226,7 +227,8 @@ private:
                 }
                 output_cloud = cloud_cropped;
             }
-            else RCLCPP_ERROR(this->get_logger(), "%s%s", "[Array Filter] ", ERROR_TEXT_PARAM_NUM);
+            else RCLCPP_ERROR(this->get_logger(),
+                "[Array Filter] %s [%ld recieved]", ERROR_TEXT_PARAM_NUM, passvec.size());
         }
         if (toggle_cam_filter)
         {
@@ -363,7 +365,8 @@ private:
     {
         int s = crop_box_array.size();
         if (s % 6)
-            RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+            RCLCPP_ERROR(this->get_logger(),
+            "[Array Filter] %s [%d recieved]", ERROR_TEXT_PARAM_NUM, s);
         else
         {   
             std::string tempstr = "Crop Box Array Filter parameters:"
@@ -390,8 +393,9 @@ private:
     void printcfg_b()
     {
         int s = crop_boundary.size();
-        if (s % 6)
-            RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+        if (s != 6)
+            RCLCPP_ERROR(this->get_logger(), "ERROR: 6 parameters expected!"
+                "(minX, minY, minZ, maxX, maxY, maxZ <-> %d recieved)", s);
         else
         {   
             std::string tempstr = "Pointcloud boundaries:\n[Crop Boundary Filter parameters]";
