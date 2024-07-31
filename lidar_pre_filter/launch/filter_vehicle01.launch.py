@@ -22,10 +22,10 @@ def generate_launch_description():
                 {'output_frame': LaunchConfiguration("out_frame")},
                 {'verbose1': False},
                 {'verbose2': False},
-                #{'cloud_boundaries': [ # not implemented
-                ##   minX    minY    minZ    maxX    maxY    maxZ
-                #    -220.0, 220.0,  -220.0, 220.0,  -10.0,  5.0
-                #]},
+                {'crop_boundary': [
+                #   minX    minY    minZ    maxX    maxY    maxZ
+                    -220.0, -220.0, -10.0,  220.0,  220.0,  5.0,
+                ]},
                 {'crop_box_array': [
                 #   minX    minY    minZ    maxX    maxY    maxZ
                     0.25,   -0.35,  -0.25,  2.35,   0.35,   0.45,   # main body
@@ -35,7 +35,7 @@ def generate_launch_description():
                     0.15,   -0.3,   0.4,    0.6,    0.3,    1.0,    # seat
                     0.5,    -0.25,  0.4,    1.35,   0.25,   1.0,    # pilot
                 ]},
-                #{'toggle_boundary_trim': False}, # not implemented
+                {'toggle_boundary_trim': True},
                 {'toggle_box_filter': True},
                 {'toggle_cam_filter': True},
             ]

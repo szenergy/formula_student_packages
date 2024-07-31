@@ -51,13 +51,11 @@ class FliterVehicle : public rclcpp::Node
                 RCLCPP_INFO_STREAM(this->get_logger(), "verbose2: " << param.get_value<bool>());
                 verbose2 = param.get_value<bool>();
             }
-            /*
             else if (param.get_name() == "toggle_boundary_trim")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_boundary_trim: " << param.get_value<bool>());
                 toggle_boundary_trim = param.get_value<bool>();
             }
-            */
             else if (param.get_name() == "toggle_box_filter")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_box_filter: " << param.get_value<bool>());
@@ -68,17 +66,15 @@ class FliterVehicle : public rclcpp::Node
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_cam_filter: " << param.get_value<bool>());
                 toggle_cam_filter = param.get_value<bool>();
             }
-            /*
-            else if (param.get_name() == "boundary_array")
+            else if (param.get_name() == "crop_boundary")
             {
-                crop_box_array = param.get_value<std::vector<double>>();
-                printcfg();
+                crop_boundary = param.get_value<std::vector<double>>();
+                printcfg_b();
             }
-            */
             else if (param.get_name() == "crop_box_array")
             {
                 crop_box_array = param.get_value<std::vector<double>>();
-                printcfg();
+                printcfg_a();
             }
             else if (param.get_name() == "cam_cone_radius")
             {
@@ -103,13 +99,11 @@ public:
         this->declare_parameter<std::string>("output_frame", "base_link");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
-        //this->declare_parameter<bool>("toggle_boundary_trim", false);
+        this->declare_parameter<bool>("toggle_boundary_trim", true);
         this->declare_parameter<bool>("toggle_box_filter", true);
         this->declare_parameter<bool>("toggle_cam_filter", true);
-        /*
-        this->declare_parameter<std::vector<double>>("boundary_array",
+        this->declare_parameter<std::vector<double>>("crop_boundary",
             std::vector<double>{-200.0, -25.0, -2.0, 200.0, 25.0, 2.0});
-        */
         this->declare_parameter<std::vector<double>>("crop_box_array",
             std::vector<double>{-1.2, -1.2, -1.2, 1.2, 1.2, 1.2});
         this->declare_parameter<float>("cam_cone_radius", 0.5);
@@ -119,10 +113,10 @@ public:
         this->get_parameter("output_frame", output_frame);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
-        //this->get_parameter("toggle_boundary_trim", toggle_boundary_trim);
+        this->get_parameter("toggle_boundary_trim", toggle_boundary_trim);
         this->get_parameter("toggle_box_filter", toggle_box_filter);
         this->get_parameter("toggle_cam_filter", toggle_cam_filter);
-        //this->get_parameter("boundary_array", boundary_array);
+        this->get_parameter("crop_boundary", crop_boundary);
         this->get_parameter("crop_box_array", crop_box_array);
         this->get_parameter("cam_cone_radius", cam_cone_radius);
 /*
@@ -148,16 +142,16 @@ public:
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
         RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << this->get_parameter("cam_cones_topic").as_string());
-        printcfg();
-
+        printcfg_b();
+        printcfg_a();
     }
 
 private:
     void lidar_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr input_msg)
     {
-        RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s\n",
-            //"Trimming of the pointcloud at the boundaries is turned %s",
-            (toggle_box_filter ? "ON" : "OFF"));//, (toggle_boundary_trim ? "ON" : "OFF"));
+        RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s\n"
+            "Trimming of the pointcloud at the boundaries is turned %s",
+            (toggle_box_filter ? "ON" : "OFF"), (toggle_boundary_trim ? "ON" : "OFF"));
         // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
         
         //ROS2 msg - final output msg + temporarily holds input after transformation
@@ -183,36 +177,47 @@ private:
         }
         else pcl::fromROSMsg(*input_msg, *cloud);   //let pcl through without transformation
 
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_trimmed(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
+        
+        if (toggle_boundary_trim)
+        {
+            // Filter out points outside of the box
+            pcl::CropBox<pcl::PointXYZI> crop_over;
+            std::vector<float> passvec;
+            passvec.resize(crop_boundary.size());
+            for (int i = crop_boundary.size() - 1; i >= 0; i--) passvec[i] = crop_boundary[i];
+            if (!(passvec.size() % 6))          //sanity check
+            {
+                crop_over.setInputCloud(cloud);
+                crop_over.setMin(Eigen::Vector4f(passvec[0], passvec[1], passvec[2], 1.0));
+                crop_over.setMax(Eigen::Vector4f(passvec[3], passvec[4], passvec[5], 1.0));
+                crop_over.filter(*cloud_trimmed);
+                output_cloud = cloud_trimmed;
+            }
+            else RCLCPP_ERROR(this->get_logger(), "%s%s", "[Boundary Filter] ", ERROR_TEXT_PARAM_NUM);
+        }
         if (toggle_box_filter)
         {
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_trimmed(new pcl::PointCloud<pcl::PointXYZI>);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cropped(new pcl::PointCloud<pcl::PointXYZI>);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
-            pcl::CropBox<pcl::PointXYZI> crop_over;
-            pcl::CropBox<pcl::PointXYZI>* crop_box;
-
-            // Filter out points outside of the box - UNUSED - might slightly improve performance
-            /*
-            crop_over.setInputCloud(cloud);
-            crop_over.setMin(Eigen::Vector4f(minX_over, minY_over, minZ_over, 1.0));
-            crop_over.setMax(Eigen::Vector4f(maxX_over, maxY_over, maxZ_over, 1.0));
-            crop_over.filter(*cloud_trimmed);
-            */
-
             // Array-based crop box! (multiple boxes, sequential filtering)
+            pcl::CropBox<pcl::PointXYZI>* crop_box;
             std::vector<float> passvec;
             passvec.resize(crop_box_array.size());
             for (int i = crop_box_array.size() - 1; i >= 0; i--) passvec[i] = crop_box_array[i];
-            if (!(crop_box_array.size() % 6))   //sanity check
+            if (!(passvec.size() % 6))          //sanity check
             {
                 int s = crop_box_array.size();
                 for (int i = 0; i < s; i += 6) //per crop box
                 {
                     crop_box = new pcl::CropBox<pcl::PointXYZI>;
-                    if (!i) {
-                        if (true) crop_box->setInputCloud(cloud);   //first time (original cloud)
-                        else {} }                                   //trimmed input (todo?)
-                    else crop_box->setInputCloud(cloud_cropped);    //repeat on previous result
+                    if (!i)                                             //first time
+                    {
+                        if (toggle_boundary_trim)
+                            crop_box->setInputCloud(cloud_trimmed);     //trimmed input cloud
+                        else crop_box->setInputCloud(cloud);            //original input cloud
+                    }
+                    else crop_box->setInputCloud(cloud_cropped);        //repeat on previous result
                     crop_box->setMin(Eigen::Vector4f(passvec[i], passvec[i+1], passvec[i+2], 1.0));
                     crop_box->setMax(Eigen::Vector4f(passvec[i+3], passvec[i+4], passvec[i+5], 1.0));
                     crop_box->setNegative(true);
@@ -221,11 +226,10 @@ private:
                 }
                 output_cloud = cloud_cropped;
             }
-            else RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+            else RCLCPP_ERROR(this->get_logger(), "%s%s", "[Array Filter] ", ERROR_TEXT_PARAM_NUM);
         }
         if (toggle_cam_filter)
         {
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cones(new pcl::PointCloud<pcl::PointXYZI>);
             int s = output_cloud->points.size();
             int c = cones.size();
             float x, y, r,
@@ -343,26 +347,26 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
-    //std::vector<double> crop_boundary = {-10.0, -5.0, -2.0, 10.0, 5.0, 2.0};
+    std::vector<double> crop_boundary = {-10.0, -5.0, -2.0, 10.0, 5.0, 2.0};
     std::vector<double> crop_box_array = {-0.8, -0.8, -0.8, 0.8, 0.8, 0.8};
     float cam_cone_radius = 0.5;
     bool verbose1 = false;
     bool verbose2 = true;
-    //bool toggle_boundary_trim = false;
+    bool toggle_boundary_trim = true;
     bool toggle_box_filter = true;
     bool toggle_cam_filter = true;
     size_t count_;
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
                 " (should be a multiple of 6: minX, minY, minZ, maxX, maxY, maxZ)";
 
-    void printcfg()
+    void printcfg_a()
     {
         int s = crop_box_array.size();
         if (s % 6)
             RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
         else
         {   
-            std::string tempstr = "BoxFilter parameters:"
+            std::string tempstr = "Crop Box Array Filter parameters:"
                 "\n#\t minX\t minY\t minZ\t maxX\t maxY\t maxZ";
             char* buff = new char[52];  //line length is 52 in this format
             for (int i = 0; i < s; i += 6)
@@ -379,6 +383,30 @@ private:
                     tempstr += buff;
             }
             tempstr += "\n-----";
+            RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+            delete[] buff;
+        }
+    }
+    void printcfg_b()
+    {
+        int s = crop_boundary.size();
+        if (s % 6)
+            RCLCPP_ERROR(this->get_logger(), ERROR_TEXT_PARAM_NUM);
+        else
+        {   
+            std::string tempstr = "Pointcloud boundaries:\n[Crop Boundary Filter parameters]";
+            char* buff = new char[76];      //needed string length is 76 in this format
+            snprintf(buff, 76,
+                "\nX:\t%+8.2f\t-->\t%+8.2f"
+                "\nY:\t%+8.2f\t-->\t%+8.2f"
+                "\nZ:\t%+8.2f\t-->\t%+8.2f",
+                crop_boundary[0],   //minX
+                crop_boundary[3],   //maxX
+                crop_boundary[1],   //minY
+                crop_boundary[4],   //maxY
+                crop_boundary[2],   //minZ
+                crop_boundary[5]);  //maxZ
+            tempstr += buff;
             RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
             delete[] buff;
         }
