@@ -119,20 +119,11 @@ public:
         this->get_parameter("crop_boundary", crop_boundary);
         this->get_parameter("crop_box_array", crop_box_array);
         this->get_parameter("cam_cone_radius", cam_cone_radius);
-/*
-        rclcpp::TimerBase::SharedPtr timer =
-            this->create_wall_timer(50ms, std::bind(&FliterVehicle::timer_callback, this));
-        for (float i = -3; i < 1; i += 0.05)
-            for (float j = -1; j < 1; j += 0.05)
-                for (float k = -1; k < 1; k += 0.05)
-                    test_cloud.points.push_back(pcl::PointXYZI(i,j,k,1.0));
-*/
 
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
-//        pub_testcloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("testcloud", 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic,
             rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
         sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic,
@@ -142,8 +133,8 @@ public:
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
         RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << this->get_parameter("cam_cones_topic").as_string());
-        printcfg_b();
-        printcfg_a();
+        printcfg_b();   //show info about pcl boundary cropping ("trimming" of the points too far)
+        printcfg_a();   //show info about pcl array cropping (~=shape of the vehicle to be removed)
     }
 
 private:
@@ -152,11 +143,12 @@ private:
         RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s\n"
             "Trimming of the pointcloud at the boundaries is turned %s",
             (toggle_box_filter ? "ON" : "OFF"), (toggle_boundary_trim ? "ON" : "OFF"));
-        // RCLCPP_INFO(this->get_logger(), "frame_id: '%s'", input_msg->header.frame_id.c_str());
         
         //ROS2 msg - final output msg + temporarily holds input after transformation
         sensor_msgs::msg::PointCloud2 output_msg;
+        //pcl version to operate on later
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+        //if every module is turned off: output = input (transformed)
         pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud = cloud;
         // TF
         if (input_msg->header.frame_id != output_frame)
@@ -209,7 +201,7 @@ private:
             if (!(passvec.size() % 6))          //sanity check
             {
                 int s = crop_box_array.size();
-                for (int i = 0; i < s; i += 6) //per crop box
+                for (int i = 0; i < s; i += 6)  //per crop box
                 {
                     crop_box = new pcl::CropBox<pcl::PointXYZI>;
                     if (!i)                                             //first time
@@ -235,7 +227,7 @@ private:
             int s = output_cloud->points.size();
             int c = cones.size();
             float x, y, r,
-                rs = cam_cone_radius * cam_cone_radius;
+                rs = cam_cone_radius * cam_cone_radius; //acceptable radius (from a cone), squared
             for (int i = 0; i < s; i++)     //for every point
             {
                 for (int j = 0; j < c; j++) //for every cone
@@ -256,26 +248,14 @@ private:
         // Add the same frame_id as the input, it is not included in pcl PointXYZI
         output_msg.header.frame_id = output_frame;
         pub_lidar_->publish(output_msg);    // Publish the cloud data as a ROS message
-        //RCLCPP_INFO_STREAM(this->get_logger(), output_cloud->points.size());
     }
-/*
-    void timer_callback()
-    {
-        sensor_msgs::msg::PointCloud2 test_msg;
-        pcl::toROSMsg(test_cloud, test_msg);
-        test_msg.header.frame_id = "laser_data_frame";
-        test_msg.header.stamp = this->get_clock()->now();
-        pub_testcloud_->publish(test_msg);
-    }
-*/
     void cam_cones_callback(const visualization_msgs::msg::MarkerArray::ConstSharedPtr markers_in)
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First CamCone input recieved, CamFilter is turned %s",
             (toggle_cam_filter ? "ON" : "OFF"));
-//        timer_callback(); //temp
         if (!toggle_cam_filter) return;
         int s = markers_in->markers.size();
-        /*  //TF (should not be needed)
+        /*  //TF (unused)
         double tfx = 0; //x component of translation
         double tfy = 0; //y component of translation
         double tfs = 0; //sine component of rotation
@@ -289,7 +269,7 @@ private:
                     "[Cam TF] Marker frame does not match output frame! (%s)\n",
                     output_frame.c_str());
                 //return;
-                /*  //TF (should not be needed)
+                /*  //TF (unused)
                 try
                 {
                     tf = tf_buffer_->lookupTransform(output_frame, markers_in->markers[0].header.frame_id, tf2::TimePointZero);
@@ -315,7 +295,7 @@ private:
         }
         cones.clear();
         pcl::PointXY tempoint;
-        float eps = 0.001;
+        float eps = 0.001;  //smallest number (+-) to not be considered zero
         for (int i = 0; i < s; i++)
         {
             tempoint.x = markers_in->markers[i].pose.position.x;
@@ -323,21 +303,16 @@ private:
             if ((tempoint.x > -eps && tempoint.x < +eps) &&
                 (tempoint.y > -eps && tempoint.y < +eps))
                 continue;   //if ~zero: ignore
-            //TF (should not be needed)
-            /*
+            /*  //TF (unused)
             //translation + rotation (rot matrix coefficients)
             tempoint.y = tfy + ( tfs * tempoint.x + tfc * tempoint.y );
             tempoint.x = tfx + ( tfc * tempoint.x - tfs * markers_in->markers[i].pose.position.y ); 
             //                                            ^ (tempoint.y got overwritten)
             */
             cones.push_back(tempoint);
-            //RCLCPP_INFO(this->get_logger(), "\n%d\t%f\t%f", i, tempoint.x, tempoint.y);
         }
-        //RCLCPP_INFO(this->get_logger(), "---");
     }
-
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar_;
-//    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_testcloud_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_cam_cones_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
@@ -361,7 +336,7 @@ private:
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
                 " (should be a multiple of 6: minX, minY, minZ, maxX, maxY, maxZ)";
 
-    void printcfg_a()
+    void printcfg_a()   //print array filter params
     {
         int s = crop_box_array.size();
         if (s % 6)
@@ -377,12 +352,12 @@ private:
                 snprintf(buff, 52,
                     "\n%d\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f",
                     i / 6,
-                    crop_box_array[i],     //minX
-                    crop_box_array[i+1],   //minY
-                    crop_box_array[i+2],   //minZ
-                    crop_box_array[i+3],   //maxX
-                    crop_box_array[i+4],   //maxY
-                    crop_box_array[i+5]);  //maxZ
+                    crop_box_array[i],      //minX
+                    crop_box_array[i+1],    //minY
+                    crop_box_array[i+2],    //minZ
+                    crop_box_array[i+3],    //maxX
+                    crop_box_array[i+4],    //maxY
+                    crop_box_array[i+5]);   //maxZ
                     tempstr += buff;
             }
             tempstr += "\n-----";
@@ -390,14 +365,14 @@ private:
             delete[] buff;
         }
     }
-    void printcfg_b()
+    void printcfg_b()   //print boundary filter params
     {
         int s = crop_boundary.size();
         if (s != 6)
             RCLCPP_ERROR(this->get_logger(), "ERROR: 6 parameters expected!"
                 "(minX, minY, minZ, maxX, maxY, maxZ <-> %d recieved)", s);
         else
-        {   
+        {
             std::string tempstr = "Pointcloud boundaries:\n[Crop Boundary Filter parameters]";
             char* buff = new char[76];      //needed string length is 76 in this format
             snprintf(buff, 76,
@@ -415,8 +390,7 @@ private:
             delete[] buff;
         }
     }
-    std::vector<pcl::PointXY> cones;
-//    pcl::PointCloud<pcl::PointXYZI> test_cloud;
+    std::vector<pcl::PointXY> cones;    //2D coordinates of cones (preprocessed)
 };
 
 int main(int argc, char *argv[])
