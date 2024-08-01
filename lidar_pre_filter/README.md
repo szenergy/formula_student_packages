@@ -4,21 +4,35 @@
 
 ## Parameters
 
-| Parameter    | Value e.g. | Description |
-|--------------|-------|-------------|
-| `cloud_in_topic`  | `/cloud` | Pointcloud to process |
-| `verbose1`  | `true` | More log info |
-| `verbose2`  | `true` | More log info |
-| `minX_over`  | -220.0| Outer crop box minX_over |
-| `maxX_over`  | 220.0 | Outer crop box maxX_over |
-| `minY_over`  | -220.0| Outer crop box minY_over |
-| `maxY_over`  | 220.0 | Outer crop box maxY_over |
-| `minZ_over`  | -10.0 | Outer crop box minZ_over |
-| `maxZ_over`  | -0.05 | Outer crop box maxZ_over |
-| `minX_vehicle` | -2.0 | Negative vehicle filter minX_vehicle |
-| `maxX_vehicle` | +2.0 | Negative vehicle filter maxX_vehicle |
-| `minY_vehicle` | -2.0 | Negative vehicle filter minY_vehicle |
-| `maxY_vehicle` | +2.0 | Negative vehicle filter maxY_vehicle |
+| Parameter             | Value e.g.     | Description                                 |
+|-----------------------|----------------|---------------------------------------------|
+| `cloud_in_topic`      | `/cloud_topic` | Pointcloud to process                       |
+| `cam_cones_topic`     | `/cones_topic` | Coordinates of cones (from camera)          |
+| `output_frame`        | `/out_frame`   | Output frame to publish (and transform) to  |
+| `verbose1`            | `true`         | More log info                               |
+| `verbose2`            | `true`         | More log info                               |
+| `toggle_boundary_trim`| `true`         | Turn filtering ("trim") of far points ON    |
+| `toggle_box_filter`   | `true`         | Turn cutting out boxes by given array ON    |
+| `toggle_cam_filter`   | `true`         | Turn filtering by distance from cones ON    |
+| `crop_boundary`       | 6x1 array      | Region of interest                          |
+| -> [0]                | `-220.0`       | minX - no points with smaller X remain      |
+| -> [1]                | `-220.0`       | minY - no points with smaller Y remain      |
+| -> [2]                | `-10.0`        | minZ - no points with smaller Z remain      | 
+| -> [3]                | `220.0`        | maxX - no points with greater X remain      |
+| -> [4]                | `220.0`        | maxY - no points with greater Y remain      |
+| -> [5]                | `5.0`          | maxZ - no points with greater Z remain      |
+| `crop_box_array`      | 6xN array      | same as crop_boundary, but inverted... ->   |
+| ... **see below**     | (...)          | -> ...the points WITHIN get filtered out    |
+
+#### **crop_box_array**
+| #  | minX     | minY     | minZ     | maxX     | maxY     | maxZ     | description  |
+|----|----------|----------|----------|----------|----------|----------|--------------|
+| 1. | `0.25,`  | `-0.35,` | `-0.25,` | `2.35,`  | `0.35,`  | `0.45,`  | main body    |
+| 2. | `0.5,`   | `-0.6,`  | `-0.25,` | `1.2,`   | `0.6,`   | `0.2,`   | side parts   |
+| 3. | `-0.25,` | `-0.7,`  | `-0.25,` | `0.25,`  | `0.7,`   | `0.25,`  | rear wheels  |
+| 4. | `1.2,`   | `-0.8,`  | `-0.25,` | `1.8,`   | ` 0.8,`  | `0.25,`  | front wheels |
+| 5. | `0.15,`  | `-0.3,`  | `0.4,`   | `0.6,`   | `0.3,`   | `1.0,`   | seat         |
+| 6. | `0.5,`   | `-0.25,` | `0.4,`   | `1.35,`  | `0.25,`  | `1.0,`   | pilot        |
 
 ![Architecture](../img/filter01.png)
 
