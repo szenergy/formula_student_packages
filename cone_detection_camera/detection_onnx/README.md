@@ -6,7 +6,7 @@
 
 ###
 
-<h2 align="left">The format of the outputs is the same as the outputs of the previous node based on darknet.<br>Im still working on the yolo models, but a new v8 is available at the link below, which doesn't do a bad job even with bad image resolution (the only problem is that it doesn't run very fast 🏃🥹).</h2>
+<h2 align="left">The format of the outputs is the same as the outputs of the previous node based on darknet.<br>Im still working on the yolo models, but a new v8 is available at the link below, which doesn't do a bad job even with bad image resolution (the only problem is that it doesn't run very fast 🏃🥹). A yolov8 könyvtár beolvasásával node ként valami probléma van!</h2>
 
 ###
 
