@@ -41,6 +41,10 @@ class FliterVehicle : public rclcpp::Node
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "output_frame: " << param.get_value<std::string>());
             }
+            if (param.get_name() == "cloud_out_topic")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "cloud_out_topic: " << param.get_value<std::string>());
+            }
             else if (param.get_name() == "verbose1")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "verbose1: " << param.get_value<bool>());
@@ -55,26 +59,39 @@ class FliterVehicle : public rclcpp::Node
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_boundary_trim: " << param.get_value<bool>());
                 toggle_boundary_trim = param.get_value<bool>();
+                printcfg_b();
             }
             else if (param.get_name() == "toggle_box_filter")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_box_filter: " << param.get_value<bool>());
                 toggle_box_filter = param.get_value<bool>();
+                printcfg_a();
             }
             else if (param.get_name() == "toggle_cam_filter")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "toggle_cam_filter: " << param.get_value<bool>());
                 toggle_cam_filter = param.get_value<bool>();
             }
+            else if (param.get_name() == "toggle_correct_deproj")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "toggle_correct_deproj: " << param.get_value<bool>());
+                toggle_correct_deproj = param.get_value<bool>();
+                printcfg_c();
+            }
             else if (param.get_name() == "crop_boundary")
             {
                 crop_boundary = param.get_value<std::vector<double>>();
-                printcfg_b();
+                printcfg_b(true);
             }
             else if (param.get_name() == "crop_box_array")
             {
                 crop_box_array = param.get_value<std::vector<double>>();
-                printcfg_a();
+                printcfg_a(true);
+            }
+            else if (param.get_name() == "corr_coeffs")
+            {
+                corr_coeffs = param.get_value<std::vector<double>>();
+                printcfg_c(true);
             }
             else if (param.get_name() == "cam_cone_radius")
             {
@@ -97,11 +114,15 @@ public:
         this->declare_parameter<std::string>("cloud_in_topic", "input_cloud");
         this->declare_parameter<std::string>("cam_cones_topic", "input_cones");
         this->declare_parameter<std::string>("output_frame", "base_link");
+        this->declare_parameter<std::string>("cloud_out_topic", "output_cloud");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
         this->declare_parameter<bool>("toggle_boundary_trim", true);
         this->declare_parameter<bool>("toggle_box_filter", true);
         this->declare_parameter<bool>("toggle_cam_filter", true);
+        this->declare_parameter<bool>("toggle_correct_deproj", false);
+        this->declare_parameter<std::vector<double>>("corr_coeffs",
+            std::vector<double>{5.0, 10.0, 15.0, 1.0, 2.0, 2.2});
         this->declare_parameter<std::vector<double>>("crop_boundary",
             std::vector<double>{-200.0, -25.0, -2.0, 200.0, 25.0, 2.0});
         this->declare_parameter<std::vector<double>>("crop_box_array",
@@ -111,19 +132,22 @@ public:
         this->get_parameter("cloud_in_topic", cloud_in_topic);
         this->get_parameter("cam_cones_topic", cam_cones_topic);
         this->get_parameter("output_frame", output_frame);
+        this->get_parameter("cloud_out_topic", cloud_out_topic);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
         this->get_parameter("toggle_boundary_trim", toggle_boundary_trim);
         this->get_parameter("toggle_box_filter", toggle_box_filter);
         this->get_parameter("toggle_cam_filter", toggle_cam_filter);
+        this->get_parameter("toggle_correct_deproj", toggle_correct_deproj);
         this->get_parameter("crop_boundary", crop_boundary);
         this->get_parameter("crop_box_array", crop_box_array);
         this->get_parameter("cam_cone_radius", cam_cone_radius);
+        this->get_parameter("corr_coeffs", corr_coeffs);
 
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
+        pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(cloud_out_topic, 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic,
             rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
         sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic,
@@ -133,17 +157,56 @@ public:
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
         RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << this->get_parameter("cam_cones_topic").as_string());
+        RCLCPP_INFO_STREAM(this->get_logger(), "output_frame: " << this->get_parameter("output_frame").as_string());
+        RCLCPP_INFO_STREAM(this->get_logger(), "cloud_out_topic: " << this->get_parameter("cloud_out_topic").as_string());
         printcfg_b();   //show info about pcl boundary cropping ("trimming" of the points too far)
         printcfg_a();   //show info about pcl array cropping (~=shape of the vehicle to be removed)
+        printcfg_c();   //show the cone position correction params (difference[dX] at distance[X])
     }
 
 private:
+    int getsegment(const double &d)
+    {
+        int s = corr_coeffs.size() / 2; //data x region
+        for (int i = 0; i < s; i++)
+        {
+            if (d < corr_coeffs[i]) return i;
+        }
+        return s;   //"invalid" X (out of data x range, but still in array)
+    }
+    //deprojection error correction
+    void correctpt(pcl::PointXY &p)
+    {
+        double r = sqrt(p.x * p.x + p.y * p.y); //distance (radial coordinate)
+        int i = getsegment(r);                  //get relevant line segment of correction function
+        int h = corr_coeffs.size() / 2;         //offset (data x range -> data y range)
+        double d;                               //difference
+        if (i)
+        {
+            if (i == h)             //if out of data x region (farther than last measurement dist.)
+                d = corr_coeffs[h+i-1]; //if farther than last measurement -> correct by last msmt.
+            else                                            //linear interpolation
+            {
+                d = (r - corr_coeffs[i-1]) *                //X
+                (corr_coeffs[h+i] - corr_coeffs[h+i-1])     //delta Y
+                / (corr_coeffs[i] - corr_coeffs[i-1])       //delta X
+                + corr_coeffs[h+i-1];                       //Y0
+            }
+        }
+        else d = corr_coeffs[h];    //if closer than 1st measurement dist. -> correct by 1st msmt.
+        d *= 1 / r;         //per given distance (-> becomes direct coefficient for coordinates)
+        p.x -= d * p.x;     //subtract x component of difference (error) from x
+        p.y -= d * p.y;     //subtract y component of difference (error) from y
+    }
+
     void lidar_callback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr input_msg)
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First PCL input recieved, BoxFilter is turned %s\n"
-            "Trimming of the pointcloud at the boundaries is turned %s",
-            (toggle_box_filter ? "ON" : "OFF"), (toggle_boundary_trim ? "ON" : "OFF"));
-        
+            "Trimming of the pointcloud at the boundaries is turned %s\n"
+            "Correction of the cone coordinates by deprojection error is turned %s",
+            (toggle_box_filter ? "ON" : "OFF"),
+            (toggle_boundary_trim ? "ON" : "OFF"),
+            (toggle_correct_deproj ? "ON" : "OFF"));
         //ROS2 msg - final output msg + temporarily holds input after transformation
         sensor_msgs::msg::PointCloud2 output_msg;
         //pcl version to operate on later
@@ -249,6 +312,7 @@ private:
         output_msg.header.frame_id = output_frame;
         pub_lidar_->publish(output_msg);    // Publish the cloud data as a ROS message
     }
+
     void cam_cones_callback(const visualization_msgs::msg::MarkerArray::ConstSharedPtr markers_in)
     {
         RCLCPP_INFO_ONCE(this->get_logger(), "First CamCone input recieved, CamFilter is turned %s",
@@ -309,6 +373,8 @@ private:
             tempoint.x = tfx + ( tfc * tempoint.x - tfs * markers_in->markers[i].pose.position.y ); 
             //                                            ^ (tempoint.y got overwritten)
             */
+            if (toggle_correct_deproj)
+                correctpt(tempoint);    //correct deprojection error (distance vs measured distance)
             cones.push_back(tempoint);
         }
     }
@@ -316,9 +382,10 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_cam_cones_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
-    std::string cloud_in_topic = "pointcloud_topic";
+    std::string cloud_in_topic = "pointcloud_topic_in";
     std::string cam_cones_topic = "cone_coordinates";
     std::string output_frame = "base_link";
+    std::string cloud_out_topic = "pointcloud_topic_out";
 
     geometry_msgs::msg::TransformStamped tf;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
@@ -326,69 +393,112 @@ private:
 
     std::vector<double> crop_boundary = {-10.0, -5.0, -2.0, 10.0, 5.0, 2.0};
     std::vector<double> crop_box_array = {-0.8, -0.8, -0.8, 0.8, 0.8, 0.8};
+    std::vector<double> corr_coeffs = {0.0, 0.0, 1.0, 0.0};
     float cam_cone_radius = 0.5;
     bool verbose1 = false;
     bool verbose2 = true;
     bool toggle_boundary_trim = true;
     bool toggle_box_filter = true;
     bool toggle_cam_filter = true;
+    bool toggle_correct_deproj = false;
     size_t count_;
     const char* ERROR_TEXT_PARAM_NUM = "ERROR: Incorrect number of Crop Box parameters!"
                 " (should be a multiple of 6: minX, minY, minZ, maxX, maxY, maxZ)";
 
-    void printcfg_a()   //print array filter params
+    void printcfg_a(bool verbose = false)   //print array filter params
     {
-        int s = crop_box_array.size();
-        if (s % 6)
-            RCLCPP_ERROR(this->get_logger(),
-            "[Array Filter] %s [%d recieved]", ERROR_TEXT_PARAM_NUM, s);
-        else
-        {   
-            std::string tempstr = "Crop Box Array Filter parameters:"
-                "\n#\t minX\t minY\t minZ\t maxX\t maxY\t maxZ";
-            char* buff = new char[52];  //line length is 52 in this format
-            for (int i = 0; i < s; i += 6)
-            {
-                snprintf(buff, 52,
-                    "\n%d\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f\t%+5.2f",
-                    i / 6,
-                    crop_box_array[i],      //minX
-                    crop_box_array[i+1],    //minY
-                    crop_box_array[i+2],    //minZ
-                    crop_box_array[i+3],    //maxX
-                    crop_box_array[i+4],    //maxY
-                    crop_box_array[i+5]);   //maxZ
-                    tempstr += buff;
-            }
-            tempstr += "\n-----";
-            RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
-            delete[] buff;
-        }
-    }
-    void printcfg_b()   //print boundary filter params
-    {
-        int s = crop_boundary.size();
-        if (s != 6)
-            RCLCPP_ERROR(this->get_logger(), "ERROR: 6 parameters expected!"
-                "(minX, minY, minZ, maxX, maxY, maxZ <-> %d recieved)", s);
-        else
+        if (toggle_box_filter || verbose)
         {
-            std::string tempstr = "Pointcloud boundaries:\n[Crop Boundary Filter parameters]";
-            char* buff = new char[76];      //needed string length is 76 in this format
-            snprintf(buff, 76,
-                "\nX:\t%+8.2f\t-->\t%+8.2f"
-                "\nY:\t%+8.2f\t-->\t%+8.2f"
-                "\nZ:\t%+8.2f\t-->\t%+8.2f",
-                crop_boundary[0],   //minX
-                crop_boundary[3],   //maxX
-                crop_boundary[1],   //minY
-                crop_boundary[4],   //maxY
-                crop_boundary[2],   //minZ
-                crop_boundary[5]);  //maxZ
-            tempstr += buff;
-            RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
-            delete[] buff;
+            int s = crop_box_array.size();
+            if (s % 6)
+                RCLCPP_ERROR(this->get_logger(),
+                "[Array Filter] %s [%d recieved]", ERROR_TEXT_PARAM_NUM, s);
+            else
+            {   
+                std::string tempstr = "Crop Box Array Filter parameters:"
+                    "\n#\t  minX\t  minY\t  minZ\t  maxX\t  maxY\t  maxZ";
+                char* buff = new char[53];
+                for (int i = 0; i < s; i += 6)
+                {
+                    snprintf(buff, 53,  //max supported: 2 whole digits + 3 decimals (+-99.999)
+                        "\n%d.\t%+7.3f\t%+7.3f\t%+7.3f\t%+7.3f\t%+7.3f\t%+7.3f",
+                        i / 6 + 1,      //max params supported: 99 (2-digit ordinal prefix)
+                        crop_box_array[i],      //minX
+                        crop_box_array[i+1],    //minY
+                        crop_box_array[i+2],    //minZ
+                        crop_box_array[i+3],    //maxX
+                        crop_box_array[i+4],    //maxY
+                        crop_box_array[i+5]);   //maxZ
+                        tempstr += buff;
+                }
+                tempstr += "\n-----";
+                RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+                delete[] buff;
+            }
         }
+        if (!toggle_box_filter) RCLCPP_INFO_STREAM(this->get_logger(),
+            "Crop Box Array filter is turned OFF!");
+    }
+    void printcfg_b(bool verbose = false)   //print boundary filter params
+    {
+        if (toggle_boundary_trim || verbose)
+        {
+            int s = crop_boundary.size();
+            if (s != 6)
+                RCLCPP_ERROR(this->get_logger(), "ERROR: 6 parameters expected!"
+                    "(minX, minY, minZ, maxX, maxY, maxZ <-> %d recieved)", s);
+            else
+            {
+                std::string tempstr = "Pointcloud boundaries:\n[Crop Boundary Filter parameters]";
+                char* buff = new char[82];
+                snprintf(buff, 82,  //max supported: 5 whole digits + 2 decimals (+-99999.99)
+                    "\nX:\t%+9.2f\t-->\t%+9.2f"
+                    "\nY:\t%+9.2f\t-->\t%+9.2f"
+                    "\nZ:\t%+9.2f\t-->\t%+9.2f",
+                    crop_boundary[0],   //minX
+                    crop_boundary[3],   //maxX
+                    crop_boundary[1],   //minY
+                    crop_boundary[4],   //maxY
+                    crop_boundary[2],   //minZ
+                    crop_boundary[5]);  //maxZ
+                tempstr += buff;
+                tempstr += "\n-----";
+                RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+                delete[] buff;
+            }
+        }
+        if (!toggle_boundary_trim) RCLCPP_INFO_STREAM(this->get_logger(),
+            "Trimming of the pointcloud at the boundaries is turned OFF!");
+    }
+    void printcfg_c(bool verbose = false)   //print deprojection correcting parameters
+    {
+        if (toggle_correct_deproj || verbose)
+        {
+            int s = corr_coeffs.size();
+            if (s % 2)
+                RCLCPP_ERROR(this->get_logger(),
+                "[Deprojection corrector] %s [%d recieved]", ERROR_TEXT_PARAM_NUM, s);
+            else
+            {   
+                std::string tempstr = "Deprojection correction parameters:\n#\t\tX\t\tdX";
+                char* buff = new char[29];
+                int h = s/2;
+                for (int i = 0; i < h; i++)
+                {
+                    snprintf(buff, 29,  //max supported: 5 whole digits + 4 decimals (+-99999.9999)
+                        "\n%d.\t%11.4f\t%+11.4f",
+                        i + 1,          //max params supported: 999 (3-digit ordinal prefix)
+                        corr_coeffs[i],     //X
+                        corr_coeffs[h+i]);  //dX
+                        tempstr += buff;
+                }
+                tempstr += "\n-----";
+                RCLCPP_INFO_STREAM(this->get_logger(), tempstr);
+                delete[] buff;
+            }
+        }
+        if (!toggle_correct_deproj) RCLCPP_INFO_STREAM(this->get_logger(),
+            "Correction of the cone coordinates by deprojection error is turned OFF!");
     }
     std::vector<pcl::PointXY> cones;    //2D coordinates of cones (preprocessed)
 };
