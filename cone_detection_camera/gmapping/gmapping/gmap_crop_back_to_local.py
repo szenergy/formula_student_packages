@@ -292,46 +292,53 @@ class GlobalMappingNode(Node):
 
     def output_local_fov(self, local_fov_cones):
         marker_array = MarkerArray()
-        if local_fov_cones.size == 0:
-            self.get_logger().info("No local FOV cones to visualize")
-            return
 
-        for i, cone in enumerate(local_fov_cones):
-            marker = Marker()
-            marker.header.frame_id = "base_link"
-            marker.header.stamp = self.get_clock().now().to_msg()
-            marker.ns = "local_fov_cones"
-            marker.id = i
-            marker.type = Marker.SPHERE
-            marker.action = Marker.ADD
-            marker.pose.position.x = float(cone[0])
-            marker.pose.position.y = float(cone[1])
-            marker.pose.position.z = float(0)
-            marker.scale.x = 0.3
-            marker.scale.y = 0.3
-            marker.scale.z = 0.3
-            marker.color.a = 1.0
+        delete_marker = Marker()
+        delete_marker.header.frame_id = "laser_sensor_frame"
+        delete_marker.header.stamp = self.get_clock().now().to_msg()
+        delete_marker.ns = "local_fov_cones"
+        delete_marker.action = Marker.DELETEALL
+        marker_array.markers.append(delete_marker)
 
-            cone_id = int(cone[2])
-            if cone_id == 1:  #Y
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 0.0
-            elif cone_id == 2:  #B
-                marker.color.r = 0.0
-                marker.color.g = 0.0
-                marker.color.b = 1.0
-            elif cone_id == 3:  #O
-                marker.color.r = 1.0
-                marker.color.g = 0.5
-                marker.color.b = 0.0
-            else:
-                marker.color.r = 1.0
-                marker.color.g = 1.0
-                marker.color.b = 1.0  
+        if local_fov_cones.size > 0:
+            for i, cone in enumerate(local_fov_cones):
+                marker = Marker()
+                marker.header.frame_id = "laser_sensor_frame"
+                marker.header.stamp = self.get_clock().now().to_msg()
+                marker.ns = "local_fov_cones"
+                marker.id = i
+                marker.type = Marker.SPHERE
+                marker.action = Marker.ADD
+                marker.pose.position.x = float(cone[0])
+                marker.pose.position.y = float(cone[1])
+                marker.pose.position.z = float(0)
+                marker.scale.x = 0.3
+                marker.scale.y = 0.3
+                marker.scale.z = 0.3
+                marker.color.a = 1.0
 
-            marker_array.markers.append(marker)
+                cone_id = int(cone[2])
+                if cone_id == 1: 
+                    marker.color.r = 1.0
+                    marker.color.g = 1.0
+                    marker.color.b = 0.0
+                elif cone_id == 2:  
+                    marker.color.r = 0.0
+                    marker.color.g = 0.0
+                    marker.color.b = 1.0
+                elif cone_id == 3:  
+                    marker.color.r = 1.0
+                    marker.color.g = 0.5
+                    marker.color.b = 0.0
+                else:
+                    marker.color.r = 1.0
+                    marker.color.g = 1.0
+                    marker.color.b = 1.0  
+
+                marker_array.markers.append(marker)
+    
         self.publisher_local_fov.publish(marker_array)
+
 
 def main(args=None):
     rclpy.init(args=args)
