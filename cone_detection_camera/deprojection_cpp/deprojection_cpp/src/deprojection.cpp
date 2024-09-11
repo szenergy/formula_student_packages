@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <set>
 
+// ros2 run tf2_ros static_transform_publisher 0.466, 0.0, 0.849, 0.0, 0.0, 1.0, 0.0, laser_data_frame base_link
+
 using std::placeholders::_1;
 
 class Deproject {
@@ -129,6 +131,11 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_proj_coords_;
     rclcpp::TimerBase::SharedPtr timer_;
 
+    std::vector<double> corr_coeffs = {
+    5.0,        10.0,       15.0,       20.0,       25.0,       30.0,       //X
+    1.020905,   -1.909484,  -2.275741,  -1.418196,  -0.838905,  0.217884    //dX
+    };
+
     struct MarkerInfo {
         Eigen::Vector3d position;
         rclcpp::Time timestamp;
@@ -211,6 +218,40 @@ private:
         }
     }
 
+    inline int getsegment(const double &d)
+    {
+        int s = corr_coeffs.size() / 2; //data x region
+        for (int i = 0; i < s; i++)
+        {
+            if (d < corr_coeffs[i]) return i;
+        }
+        return s;   //"invalid" X (out of data x range, but still in array)
+    }
+
+    void correctpt(geometry_msgs::msg::Point &p)
+    {
+        double r = sqrt(p.x * p.x + p.y * p.y); //distance (radial coordinate)
+        int i = getsegment(r);                  //get relevant line segment of correction function
+        int h = corr_coeffs.size() / 2;         //offset (data x range -> data y range)
+        double d;                               //difference
+        if (i)
+        {
+            if (i == h)             //if out of data x region (farther than last measurement dist.)
+                d = corr_coeffs[h+i-1]; //if farther than last measurement -> correct by last msmt.
+            else                                            //linear interpolation
+            {
+                d = (r - corr_coeffs[i-1]) *                //X
+                (corr_coeffs[h+i] - corr_coeffs[h+i-1])     //delta Y
+                / (corr_coeffs[i] - corr_coeffs[i-1])       //delta X
+                + corr_coeffs[h+i-1];                       //Y0
+            }
+        }
+        else d = corr_coeffs[h];    //if closer than 1st measurement dist. -> correct by 1st msmt.
+        d *= 1 / r;         //per given distance (-> becomes direct coefficient for coordinates)
+        p.x -= d * p.x;     //subtract x component of difference (error) from x
+        p.y -= d * p.y;     //subtract y component of difference (error) from y
+    }
+
     void publish_markers(const std::unordered_map<std::string, MarkerInfo>& markers,
                          rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher,
                          std::set<int>& active_marker_ids) {
@@ -253,6 +294,7 @@ private:
             marker.pose.position.x = marker_info.position[0];
             marker.pose.position.y = marker_info.position[1];
             marker.pose.position.z = marker_info.position[2];
+            //correctpt(marker.pose.position);                    //correct deprojection error
             marker_array.markers.push_back(marker);
         }
 
