@@ -14,7 +14,7 @@ class PointCloudProcessor(Node): #pc clastering node
     def __init__(self):
         super().__init__('pointcloud_processor')
         self.point_subscriber = self.create_subscription(PointCloud2, 'nonground', self.pointcloud_callback, 10)
-        self.marker_publisher = self.create_publisher(MarkerArray, 'cp_markers', 10)
+        self.marker_publisher = self.create_publisher(MarkerArray, 'pc_markers', 10)
         self.declare_parameter('cluster_distance', 0.4)
         self.declare_parameter('batch_size', 10000)
         self.max_distance = 20.0

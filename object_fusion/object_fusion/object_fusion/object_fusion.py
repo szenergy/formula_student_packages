@@ -12,7 +12,7 @@ class ConeRefinementNode(Node):
 
         self.subscription_pc = self.create_subscription(
             MarkerArray,
-            'cp_markers',
+            'pc_markers',
             self.pc_callback,
             10)
         self.subscription_blue_cones = self.create_subscription(

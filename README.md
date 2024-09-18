@@ -11,6 +11,9 @@ The proposed system architecture is shown below. The following considerations ar
 
 All components are to be developed in ROS 2 Humble.
 
+
+![alt text](1.png)
+
 ```mermaid
 flowchart TD
     S[State Machine <br>/plan_state_machine] -.->|/plan_state*| LP[LIDAR pre filter<br>/prcp_lidar_filtered]
