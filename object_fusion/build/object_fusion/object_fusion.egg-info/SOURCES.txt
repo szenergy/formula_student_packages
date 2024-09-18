@@ -1,0 +1,13 @@
+package.xml
+setup.cfg
+setup.py
+object_fusion/__init__.py
+object_fusion/object_fusion.py
+object_fusion.egg-info/PKG-INFO
+object_fusion.egg-info/SOURCES.txt
+object_fusion.egg-info/dependency_links.txt
+object_fusion.egg-info/entry_points.txt
+object_fusion.egg-info/requires.txt
+object_fusion.egg-info/top_level.txt
+object_fusion.egg-info/zip-safe
+resource/object_fusion

@@ -1,0 +1,2 @@
+[console_scripts]
+object_fusion_node = object_fusion.object_fusion:main

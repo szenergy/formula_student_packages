@@ -1,0 +1,22 @@
+running develop
+running egg_info
+creating object_fusion.egg-info
+writing object_fusion.egg-info/PKG-INFO
+writing dependency_links to object_fusion.egg-info/dependency_links.txt
+writing entry points to object_fusion.egg-info/entry_points.txt
+writing requirements to object_fusion.egg-info/requires.txt
+writing top-level names to object_fusion.egg-info/top_level.txt
+writing manifest file 'object_fusion.egg-info/SOURCES.txt'
+reading manifest file 'object_fusion.egg-info/SOURCES.txt'
+writing manifest file 'object_fusion.egg-info/SOURCES.txt'
+running build_ext
+Creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages/object-fusion.egg-link (link to .)
+Installing object_fusion_node script to /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/object_fusion
+
+Installed /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion
+running symlink_data
+creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index
+creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index
+creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages
+symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/resource/object_fusion -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages
+symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/package.xml -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/object_fusion

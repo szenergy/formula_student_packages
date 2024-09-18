@@ -1,0 +1,54 @@
+[0.000000] (-) TimerEvent: {}
+[0.000296] (-) JobUnselected: {'identifier': 'pointcloud_clastering'}
+[0.000382] (object_fusion) JobQueued: {'identifier': 'object_fusion', 'dependencies': OrderedDict()}
+[0.000519] (object_fusion) JobStarted: {'identifier': 'object_fusion'}
+[0.105033] (-) TimerEvent: {}
+[0.205621] (-) TimerEvent: {}
+[0.306857] (-) TimerEvent: {}
+[0.412008] (-) TimerEvent: {}
+[0.517165] (-) TimerEvent: {}
+[0.617948] (-) TimerEvent: {}
+[0.684929] (object_fusion) Command: {'cmd': ['/Users/szonyibalazs/opt/anaconda3/envs/ros2/bin/python', '-W', 'ignore:setup.py install is deprecated', 'setup.py', 'develop', '--editable', '--build-directory', '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/build', '--no-deps', 'symlink_data'], 'cwd': '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion', 'env': {'NVM_INC': '/Users/szonyibalazs/.nvm/versions/node/v10.24.1/include/node', 'TERM_PROGRAM': 'Apple_Terminal', 'PROJ_DATA': '/Users/szonyibalazs/opt/anaconda3/envs/ros2/share/proj', 'NVM_CD_FLAGS': '-q', 'SHELL': '/bin/zsh', 'TERM': 'xterm-256color', 'HOMEBREW_REPOSITORY': '/opt/homebrew', 'TMPDIR': '/var/folders/pl/8bkzm0t16mj60z_rjgy729rw0000gn/T/', 'CONDA_SHLVL': '2', 'CONDA_PROMPT_MODIFIER': '(ros2)', 'TERM_PROGRAM_VERSION': '453', 'GSETTINGS_SCHEMA_DIR_CONDA_BACKUP': '', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/Users/szonyibalazs/ros2_ws/install:/Users/szonyibalazs/ros2_ws/install:/Users/szonyibalazs/ros2_ws/install:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/opt/anaconda3/envs/ros2:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/opt/anaconda3/envs/ros2:/Users/szonyibalazs/ros2_ws/install:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/ros2_ws:/Users/szonyibalazs/opt/anaconda3/envs/ros2', 'ROS_VERSION': '2', 'TERM_SESSION_ID': '3C890D31-406F-4354-9DF4-5829E10F5D3C', 'AMENT_PREFIX_PATH': '/Users/szonyibalazs/ros2_ws/install/pointcloud_clastering:/Users/szonyibalazs/ros2_ws/install/racetrack_simulator:/Users/szonyibalazs/ros2_ws/install/projection:/Users/szonyibalazs/ros2_ws/install/lidar_pre_filter:/Users/szonyibalazs/ros2_ws/install/kiss_icp:/Users/szonyibalazs/ros2_ws/install/gmapping:/Users/szonyibalazs/ros2_ws/install/formula_student_bringup:/Users/szonyibalazs/ros2_ws/install/detection_onnx:/Users/szonyibalazs/ros2_ws/install/detection:/Users/szonyibalazs/ros2_ws/install/deprojection_cpp:/Users/szonyibalazs/ros2_ws/install/deprojection:/Users/szonyibalazs/ros2_ws/install/cone_detection_lidar:/Users/szonyibalazs/opt/anaconda3/envs/ros2', 'NVM_DIR': '/Users/szonyibalazs/.nvm', 'USER': 'szonyibalazs', 'CONDA_EXE': '/Users/szonyibalazs/opt/anaconda3/bin/conda', 'SSH_AUTH_SOCK': '/private/tmp/com.apple.launchd.sO7e3hURQP/Listeners', '__CF_USER_TEXT_ENCODING': '0x1F5:0x1D:0x2B', 'ROS_OS_OVERRIDE': 'conda:osx', '_CE_CONDA': '', 'CONDA_PREFIX_1': '/Users/szonyibalazs/opt/anaconda3', 'PATH': '/Users/szonyibalazs/.nvm/versions/node/v10.24.1/bin:/Users/szonyibalazs/opt/anaconda3/envs/ros2/bin:/Users/szonyibalazs/opt/anaconda3/condabin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.8/bin:/Library/Frameworks/Python.framework/Versions/3.10/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/X11/bin:/Library/Apple/usr/bin:/Users/szonyibalazs/Library/Application Support/JetBrains/Toolbox/scripts:/usr/local/bin', 'PROJ_NETWORK': 'ON', 'GSETTINGS_SCHEMA_DIR': '/Users/szonyibalazs/opt/anaconda3/envs/ros2/share/glib-2.0/schemas', 'XML_CATALOG_FILES': 'file:///Users/szonyibalazs/opt/anaconda3/envs/ros2/etc/xml/catalog file:///etc/xml/catalog', 'CONDA_PREFIX': '/Users/szonyibalazs/opt/anaconda3/envs/ros2', '__CFBundleIdentifier': 'com.apple.Terminal', 'PWD': '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion', 'COLCON': '1', 'LANG': 'hu_HU.UTF-8', 'RMW_IMPLEMENTATION': 'rmw_cyclonedds_cpp', 'XPC_FLAGS': '0x0', '_CE_M': '', 'XPC_SERVICE_NAME': '0', 'SHLVL': '2', 'HOME': '/Users/szonyibalazs', 'ROS_DISTRO': 'humble', 'HOMEBREW_PREFIX': '/opt/homebrew', 'PYTHONPATH': '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/prefix_override:/Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages:/Users/szonyibalazs/ros2_ws/build/pointcloud_clastering:/Users/szonyibalazs/ros2_ws/install/pointcloud_clastering/lib/python3.11/site-packages:/Users/szonyibalazs/ros2_ws/build/gmapping:/Users/szonyibalazs/ros2_ws/install/gmapping/lib/python3.11/site-packages:/Users/szonyibalazs/ros2_ws/build/detection_onnx:/Users/szonyibalazs/ros2_ws/install/detection_onnx/lib/python3.11/site-packages:/Users/szonyibalazs/ros2_ws/build/detection:/Users/szonyibalazs/ros2_ws/install/detection/lib/python3.11/site-packages:/Users/szonyibalazs/ros2_ws/build/deprojection:/Users/szonyibalazs/ros2_ws/install/deprojection/lib/python3.11/site-packages:/Users/szonyibalazs/opt/anaconda3/envs/ros2/lib/python311/site-packages:/Users/szonyibalazs/opt/anaconda3/envs/ros2/lib/python3.11/site-packages', 'CONDA_PYTHON_EXE': '/Users/szonyibalazs/opt/anaconda3/bin/python', 'LOGNAME': 'szonyibalazs', 'NVM_BIN': '/Users/szonyibalazs/.nvm/versions/node/v10.24.1/bin', 'CONDA_DEFAULT_ENV': 'ros2', 'INFOPATH': '/opt/homebrew/share/info:', 'HOMEBREW_CELLAR': '/opt/homebrew/Cellar', 'CMAKE_PREFIX_PATH': '/Users/szonyibalazs/ros2_ws/install/racetrack_simulator:/Users/szonyibalazs/ros2_ws/install/projection:/Users/szonyibalazs/ros2_ws/install/lidar_pre_filter:/Users/szonyibalazs/ros2_ws/install/kiss_icp:/Users/szonyibalazs/ros2_ws/install/formula_student_bringup:/Users/szonyibalazs/ros2_ws/install/deprojection_cpp:/Users/szonyibalazs/ros2_ws/install/cone_detection_lidar', 'DISPLAY': '/private/tmp/com.apple.launchd.9VsDsSoSD0/org.xquartz:0', 'ROS_LOCALHOST_ONLY': '0', 'ROS_ETC_DIR': '/Users/szonyibalazs/opt/anaconda3/envs/ros2/etc/ros', '_': '/usr/bin/env'}, 'shell': False}
+[0.720223] (-) TimerEvent: {}
+[0.825438] (-) TimerEvent: {}
+[0.927649] (object_fusion) StdoutLine: {'line': b'running develop\n'}
+[0.928025] (-) TimerEvent: {}
+[0.928090] (object_fusion) StderrLine: {'line': b'/Users/szonyibalazs/opt/anaconda3/envs/ros2/lib/python3.11/site-packages/setuptools/command/develop.py:42: EasyInstallDeprecationWarning: easy_install command is deprecated.\n'}
+[0.928192] (object_fusion) StderrLine: {'line': b'!!\n'}
+[0.928241] (object_fusion) StderrLine: {'line': b'\n'}
+[0.928278] (object_fusion) StderrLine: {'line': b'        ********************************************************************************\n'}
+[0.928311] (object_fusion) StderrLine: {'line': b'        Please avoid running ``setup.py`` and ``easy_install``.\n'}
+[0.928345] (object_fusion) StderrLine: {'line': b'        Instead, use pypa/build, pypa/installer or other\n'}
+[0.928377] (object_fusion) StderrLine: {'line': b'        standards-based tools.\n'}
+[0.928407] (object_fusion) StderrLine: {'line': b'\n'}
+[0.928437] (object_fusion) StderrLine: {'line': b'        See https://github.com/pypa/setuptools/issues/917 for details.\n'}
+[0.928469] (object_fusion) StderrLine: {'line': b'        ********************************************************************************\n'}
+[0.928499] (object_fusion) StderrLine: {'line': b'\n'}
+[0.928528] (object_fusion) StderrLine: {'line': b'!!\n'}
+[0.928558] (object_fusion) StderrLine: {'line': b'  easy_install.initialize_options(self)\n'}
+[1.033054] (-) TimerEvent: {}
+[1.114631] (object_fusion) StdoutLine: {'line': b'running egg_info\n'}
+[1.114837] (object_fusion) StdoutLine: {'line': b'creating object_fusion.egg-info\n'}
+[1.126824] (object_fusion) StdoutLine: {'line': b'writing object_fusion.egg-info/PKG-INFO\n'}
+[1.127374] (object_fusion) StdoutLine: {'line': b'writing dependency_links to object_fusion.egg-info/dependency_links.txt\n'}
+[1.127825] (object_fusion) StdoutLine: {'line': b'writing entry points to object_fusion.egg-info/entry_points.txt\n'}
+[1.128069] (object_fusion) StdoutLine: {'line': b'writing requirements to object_fusion.egg-info/requires.txt\n'}
+[1.128454] (object_fusion) StdoutLine: {'line': b'writing top-level names to object_fusion.egg-info/top_level.txt\n'}
+[1.128499] (object_fusion) StdoutLine: {'line': b"writing manifest file 'object_fusion.egg-info/SOURCES.txt'\n"}
+[1.133822] (-) TimerEvent: {}
+[1.159403] (object_fusion) StdoutLine: {'line': b"reading manifest file 'object_fusion.egg-info/SOURCES.txt'\n"}
+[1.159739] (object_fusion) StdoutLine: {'line': b"writing manifest file 'object_fusion.egg-info/SOURCES.txt'\n"}
+[1.179343] (object_fusion) StdoutLine: {'line': b'running build_ext\n'}
+[1.179456] (object_fusion) StdoutLine: {'line': b'Creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages/object-fusion.egg-link (link to .)\n'}
+[1.179907] (object_fusion) StdoutLine: {'line': b'Installing object_fusion_node script to /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/object_fusion\n'}
+[1.180148] (object_fusion) StdoutLine: {'line': b'\n'}
+[1.180226] (object_fusion) StdoutLine: {'line': b'Installed /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion\n'}
+[1.180326] (object_fusion) StdoutLine: {'line': b'running symlink_data\n'}
+[1.180390] (object_fusion) StdoutLine: {'line': b'creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index\n'}
+[1.180478] (object_fusion) StdoutLine: {'line': b'creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index\n'}
+[1.180637] (object_fusion) StdoutLine: {'line': b'creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages\n'}
+[1.180672] (object_fusion) StdoutLine: {'line': b'symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/resource/object_fusion -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages\n'}
+[1.180743] (object_fusion) StdoutLine: {'line': b'symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/package.xml -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/object_fusion\n'}
+[1.207753] (object_fusion) CommandEnded: {'returncode': 0}
+[1.220977] (object_fusion) JobEnded: {'identifier': 'object_fusion', 'rc': 0}
+[1.221489] (-) EventReactorShutdown: {}

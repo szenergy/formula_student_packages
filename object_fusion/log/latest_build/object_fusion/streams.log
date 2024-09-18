@@ -1,0 +1,37 @@
+[0.687s] Invoking command in '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion': CONDA_PROMPT_MODIFIER=(ros2) PYTHONPATH=/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/prefix_override:/Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages:${PYTHONPATH} SHLVL=2 _=/usr/bin/env __CF_USER_TEXT_ENCODING=0x1F5:0x1D:0x2B /Users/szonyibalazs/opt/anaconda3/envs/ros2/bin/python -W ignore:setup.py install is deprecated setup.py develop --editable --build-directory /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/build --no-deps symlink_data
+[0.927s] running develop
+[0.928s] /Users/szonyibalazs/opt/anaconda3/envs/ros2/lib/python3.11/site-packages/setuptools/command/develop.py:42: EasyInstallDeprecationWarning: easy_install command is deprecated.
+[0.928s] !!
+[0.928s] 
+[0.928s]         ********************************************************************************
+[0.928s]         Please avoid running ``setup.py`` and ``easy_install``.
+[0.928s]         Instead, use pypa/build, pypa/installer or other
+[0.928s]         standards-based tools.
+[0.928s] 
+[0.928s]         See https://github.com/pypa/setuptools/issues/917 for details.
+[0.928s]         ********************************************************************************
+[0.928s] 
+[0.928s] !!
+[0.928s]   easy_install.initialize_options(self)
+[1.114s] running egg_info
+[1.114s] creating object_fusion.egg-info
+[1.126s] writing object_fusion.egg-info/PKG-INFO
+[1.127s] writing dependency_links to object_fusion.egg-info/dependency_links.txt
+[1.127s] writing entry points to object_fusion.egg-info/entry_points.txt
+[1.128s] writing requirements to object_fusion.egg-info/requires.txt
+[1.128s] writing top-level names to object_fusion.egg-info/top_level.txt
+[1.128s] writing manifest file 'object_fusion.egg-info/SOURCES.txt'
+[1.159s] reading manifest file 'object_fusion.egg-info/SOURCES.txt'
+[1.159s] writing manifest file 'object_fusion.egg-info/SOURCES.txt'
+[1.179s] running build_ext
+[1.179s] Creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages/object-fusion.egg-link (link to .)
+[1.179s] Installing object_fusion_node script to /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/object_fusion
+[1.180s] 
+[1.180s] Installed /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion
+[1.180s] running symlink_data
+[1.180s] creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index
+[1.180s] creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index
+[1.180s] creating /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages
+[1.180s] symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/resource/object_fusion -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/ament_index/resource_index/packages
+[1.180s] symbolically linking /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/package.xml -> /Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/share/object_fusion
+[1.208s] Invoked command in '/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion' returned '0': CONDA_PROMPT_MODIFIER=(ros2) PYTHONPATH=/Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/prefix_override:/Users/szonyibalazs/ros2_ws/src/object_fusion/install/object_fusion/lib/python3.11/site-packages:${PYTHONPATH} SHLVL=2 _=/usr/bin/env __CF_USER_TEXT_ENCODING=0x1F5:0x1D:0x2B /Users/szonyibalazs/opt/anaconda3/envs/ros2/bin/python -W ignore:setup.py install is deprecated setup.py develop --editable --build-directory /Users/szonyibalazs/ros2_ws/src/object_fusion/build/object_fusion/build --no-deps symlink_data
