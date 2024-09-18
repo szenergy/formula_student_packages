@@ -15,19 +15,20 @@ class ConeRefinementNode(Node):
             'pc_markers',
             self.pc_callback,
             10)
+
+        # Az összes bólyát egy topicról olvassuk be
         self.subscription_cones = self.create_subscription(
             MarkerArray,
             'deproj_cones',
             self.cones_callback,
             10)
 
-        self.valid_blue_pub = self.create_publisher(MarkerArray, 'Valid_blue', 10)
-        self.valid_yellow_pub = self.create_publisher(MarkerArray, 'Valid_yellow', 10)
-        self.valid_orange_pub = self.create_publisher(MarkerArray, 'Valid_orange', 10)
+        # Az összes refined bólyát egyetlen topicra publikáljuk
+        self.valid_cones_pub = self.create_publisher(MarkerArray, 'valid_deproj_cones', 10)
         self.object_pub = self.create_publisher(Marker, 'distance_correspondences', 10)
 
         self.pc_positions = None
-        self.cone_markers = None 
+        self.cone_markers = None  # Az összes bólya (kék, sárga, narancs)
 
     def pc_callback(self, msg):
         self.pc_positions = np.array(
@@ -43,43 +44,54 @@ class ConeRefinementNode(Node):
         if self.cone_markers is None:
             return
 
+        # Bólyák szétválasztása szín szerint
         blue_markers = MarkerArray()
         yellow_markers = MarkerArray()
         orange_markers = MarkerArray()
 
         for marker in self.cone_markers.markers:
-            if marker.color.b == 1.0:  
+            if marker.color.b == 1.0:  # Kék bólya
                 blue_markers.markers.append(marker)
-            elif marker.color.r == 1.0 and marker.color.g == 1.0:  
+            elif marker.color.r == 1.0 and marker.color.g == 1.0:  # Sárga bólya
                 yellow_markers.markers.append(marker)
-            elif marker.color.r == 1.0 and marker.color.g == 0.5:
+            elif marker.color.r == 1.0 and marker.color.g == 0.5:  # Narancssárga bólya
                 orange_markers.markers.append(marker)
 
-        if blue_markers.markers:
-            self.refine_and_publish_cones(blue_markers, 'blue', self.valid_blue_pub)
-        if yellow_markers.markers:
-            self.refine_and_publish_cones(yellow_markers, 'yellow', self.valid_yellow_pub)
-        if orange_markers.markers:
-            self.refine_and_publish_cones(orange_markers, 'orange', self.valid_orange_pub)
+        # Egy közös refined_markers listába rakjuk a refined bólyákat
+        refined_markers = MarkerArray()
 
-    def refine_and_publish_cones(self, cone_markers, cone_type, valid_cone_pub):
+        if blue_markers.markers:
+            refined_blue = self.refine_cone_markers(blue_markers)
+            refined_markers.markers.extend(refined_blue.markers)
+
+        if yellow_markers.markers:
+            refined_yellow = self.refine_cone_markers(yellow_markers)
+            refined_markers.markers.extend(refined_yellow.markers)
+
+        if orange_markers.markers:
+            refined_orange = self.refine_cone_markers(orange_markers)
+            refined_markers.markers.extend(refined_orange.markers)
+
+        # Publikáljuk az összes refined bólyát egyetlen topicra
+        self.valid_cones_pub.publish(refined_markers)
+
+    def refine_cone_markers(self, cone_markers):
         cone_positions = np.array(
             [[marker.pose.position.x, marker.pose.position.y, marker.pose.position.z] for marker in cone_markers.markers]
         )
 
         if self.pc_positions is None or len(self.pc_positions) == 0:
-            return
+            return MarkerArray()
         if len(cone_positions) == 0:
-            return
+            return MarkerArray()
 
         if np.isnan(self.pc_positions).any() or np.isnan(cone_positions).any():
-            return
+            return MarkerArray()
 
         try:
             refined_positions = self.distance_based_refinement(self.pc_positions, cone_positions)
-            self.publish_correspondence_objects(self.pc_positions, refined_positions, cone_type)
         except Exception as e:
-            return
+            return MarkerArray()
 
         refined_markers = MarkerArray()
 
@@ -91,7 +103,7 @@ class ConeRefinementNode(Node):
             refined_marker.pose.position.z = refined_positions[i][2]
             refined_markers.markers.append(refined_marker)
 
-        valid_cone_pub.publish(refined_markers)
+        return refined_markers
 
     def distance_based_refinement(self, pc_positions, cone_positions):
         refined_positions = []
@@ -112,6 +124,7 @@ class ConeRefinementNode(Node):
         object_marker.scale.y = 0.02
         object_marker.scale.z = 3.0
 
+        # Színek beállítása típus szerint
         if cone_type == 'blue':
             object_marker.color.r = 0.0
             object_marker.color.g = 0.0
