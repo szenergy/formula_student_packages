@@ -15,48 +15,54 @@ class ConeRefinementNode(Node):
             'pc_markers',
             self.pc_callback,
             10)
-        self.subscription_blue_cones = self.create_subscription(
+        self.subscription_cones = self.create_subscription(
             MarkerArray,
-            'blue_cones', 
-            self.blue_cones_callback,
-            10)
-        self.subscription_yellow_cones = self.create_subscription(
-            MarkerArray,
-            'yellow_cones',
-            self.yellow_cones_callback,
+            'deproj_cones',
+            self.cones_callback,
             10)
 
         self.valid_blue_pub = self.create_publisher(MarkerArray, 'Valid_blue', 10)
         self.valid_yellow_pub = self.create_publisher(MarkerArray, 'Valid_yellow', 10)
+        self.valid_orange_pub = self.create_publisher(MarkerArray, 'Valid_orange', 10)
         self.object_pub = self.create_publisher(Marker, 'distance_correspondences', 10)
 
         self.pc_positions = None
-        self.blue_cone_markers = None
-        self.yellow_cone_markers = None
+        self.cone_markers = None 
 
     def pc_callback(self, msg):
         self.pc_positions = np.array(
             [[marker.pose.position.x, marker.pose.position.y, marker.pose.position.z] for marker in msg.markers]
         )
 
-    def blue_cones_callback(self, msg):
-        self.blue_cone_markers = msg
+    def cones_callback(self, msg):
+        self.cone_markers = msg
         if self.pc_positions is not None:
-            self.refine_cones('blue')
-            
-    def yellow_cones_callback(self, msg):
-        self.yellow_cone_markers = msg
-        if self.pc_positions is not None:
-            self.refine_cones('yellow')
+            self.refine_cones()
 
-    def refine_cones(self, cone_type):
-        if cone_type == 'blue':
-            cone_markers = self.blue_cone_markers
-            valid_cone_pub = self.valid_blue_pub
-        elif cone_type == 'yellow':
-            cone_markers = self.yellow_cone_markers
-            valid_cone_pub = self.valid_yellow_pub
+    def refine_cones(self):
+        if self.cone_markers is None:
+            return
 
+        blue_markers = MarkerArray()
+        yellow_markers = MarkerArray()
+        orange_markers = MarkerArray()
+
+        for marker in self.cone_markers.markers:
+            if marker.color.b == 1.0:  
+                blue_markers.markers.append(marker)
+            elif marker.color.r == 1.0 and marker.color.g == 1.0:  
+                yellow_markers.markers.append(marker)
+            elif marker.color.r == 1.0 and marker.color.g == 0.5:
+                orange_markers.markers.append(marker)
+
+        if blue_markers.markers:
+            self.refine_and_publish_cones(blue_markers, 'blue', self.valid_blue_pub)
+        if yellow_markers.markers:
+            self.refine_and_publish_cones(yellow_markers, 'yellow', self.valid_yellow_pub)
+        if orange_markers.markers:
+            self.refine_and_publish_cones(orange_markers, 'orange', self.valid_orange_pub)
+
+    def refine_and_publish_cones(self, cone_markers, cone_type, valid_cone_pub):
         cone_positions = np.array(
             [[marker.pose.position.x, marker.pose.position.y, marker.pose.position.z] for marker in cone_markers.markers]
         )
@@ -104,10 +110,21 @@ class ConeRefinementNode(Node):
         object_marker.action = Marker.ADD
         object_marker.scale.x = 0.02
         object_marker.scale.y = 0.02
-        object_marker.scale.z = 3.0 
-        object_marker.color.r = 1.0 if cone_type == 'blue' else 1.0 
-        object_marker.color.g = 0.0
-        object_marker.color.b = 1.0 if cone_type == 'blue' else 0.0
+        object_marker.scale.z = 3.0
+
+        if cone_type == 'blue':
+            object_marker.color.r = 0.0
+            object_marker.color.g = 0.0
+            object_marker.color.b = 1.0
+        elif cone_type == 'yellow':
+            object_marker.color.r = 1.0
+            object_marker.color.g = 1.0
+            object_marker.color.b = 0.0
+        elif cone_type == 'orange':
+            object_marker.color.r = 1.0
+            object_marker.color.g = 0.5
+            object_marker.color.b = 0.0
+
         object_marker.color.a = 1.0
 
         for source, target in zip(source_positions, target_positions):
@@ -131,7 +148,6 @@ def main(args=None):
 
     cone_refinement_node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
