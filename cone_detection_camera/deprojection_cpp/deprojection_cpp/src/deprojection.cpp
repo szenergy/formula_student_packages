@@ -7,8 +7,6 @@
 #include <unordered_map>
 #include <set>
 
-// ros2 run tf2_ros static_transform_publisher 0.466, 0.0, 0.849, 0.0, 0.0, 1.0, 0.0, laser_data_frame base_link
-
 using std::placeholders::_1;
 
 class Deproject {
@@ -116,9 +114,8 @@ public:
         subscription_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
             "cone_coordinates", 10, std::bind(&DeprojectionNode::listener_callback, this, _1));
         
-        publisher_yellow_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("yellow_cones", 10);
-        publisher_orange_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("orange_cones", 10);
-        publisher_blue_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("blue_cones", 10);
+        //deproj_cones
+        publisher_cones_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("deproj_cones", 10);
         pub_proj_coords_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("pub_proj_coords", 10);
 
         timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&DeprojectionNode::timer_callback, this));
@@ -127,22 +124,23 @@ public:
 private:
     std::shared_ptr<Deproject> deprojector_;
     rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr subscription_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_yellow_, publisher_orange_, publisher_blue_;
+    //deproj_cones
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_cones_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_proj_coords_;
     rclcpp::TimerBase::SharedPtr timer_;
 
     std::vector<double> corr_coeffs = {
-    5.0,        10.0,       15.0,       20.0,       25.0,       30.0,       //X
-    1.020905,   -1.909484,  -2.275741,  -1.418196,  -0.838905,  0.217884    //dX
+        5.0,        10.0,       15.0,       20.0,       25.0,       30.0,       //X
+        1.020905,   -1.909484,  -2.275741,  -1.418196,  -0.838905,  0.217884    //dX
     };
 
     struct MarkerInfo {
         Eigen::Vector3d position;
         rclcpp::Time timestamp;
+        int cone_id;  //find cone color
     };
 
-    std::unordered_map<std::string, MarkerInfo> markers_yellow_, markers_orange_, markers_blue_;
-    std::set<int> active_marker_ids_yellow_, active_marker_ids_orange_, active_marker_ids_blue_;
+    std::unordered_map<std::string, MarkerInfo> markers_;
 
     void listener_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
         if (msg->data.size() % 5 != 0) {
@@ -166,15 +164,9 @@ private:
             pub_msg.data.push_back(point[1]);
 
             std::string marker_id = std::to_string(u) + "_" + std::to_string(v);
-            MarkerInfo marker_info{point, current_time};
+            MarkerInfo marker_info{point, current_time, cone_id};
 
-            if (cone_id == 1) {
-                markers_yellow_[marker_id] = marker_info;
-            } else if (cone_id == 3) {
-                markers_orange_[marker_id] = marker_info;
-            } else if (cone_id == 2) {
-                markers_blue_[marker_id] = marker_info;
-            }
+            markers_[marker_id] = marker_info;  
         }
 
         pub_proj_coords_->publish(pub_msg);
@@ -183,89 +175,39 @@ private:
     void timer_callback() {
         auto current_time = this->now();
         double time_threshold = 0.1; 
-        std::unordered_map<std::string, MarkerInfo> new_markers_yellow, new_markers_orange, new_markers_blue;
-        process_markers(markers_yellow_, new_markers_yellow, current_time, time_threshold);
-        process_markers(markers_orange_, new_markers_orange, current_time, time_threshold);
-        process_markers(markers_blue_, new_markers_blue, current_time, time_threshold);
-        publish_markers(new_markers_yellow, publisher_yellow_, active_marker_ids_yellow_);
-        publish_markers(new_markers_orange, publisher_orange_, active_marker_ids_orange_);
-        publish_markers(new_markers_blue, publisher_blue_, active_marker_ids_blue_);
+        std::unordered_map<std::string, MarkerInfo> new_markers;
+        process_markers(markers_, new_markers, current_time, time_threshold);
+        publish_markers(new_markers, publisher_cones_);
     }
-
 
     void process_markers(std::unordered_map<std::string, MarkerInfo>& markers, 
                          std::unordered_map<std::string, MarkerInfo>& new_markers, 
                          rclcpp::Time current_time, double time_threshold) {
-        for (auto it = markers.begin(); it != markers.end();) {
-            double time_diff = (current_time.seconds() - it->second.timestamp.seconds());
-
-            if (time_diff > time_threshold) {
-                it = markers.erase(it);
-            } else {
-                bool keep_marker = true;
-                for (const auto& [new_marker_id, new_marker_info] : new_markers) {
-                    double distance = (it->second.position - new_marker_info.position).norm();
-                    if (distance < 0.4) {
-                        keep_marker = false;
-                        break;
-                    }
-                }
-                if (keep_marker) {
-                    new_markers[it->first] = it->second;
-                }
-                ++it;
+        for (auto it = markers.begin(); it != markers.end(); ++it) {
+            if ((current_time - it->second.timestamp).seconds() < time_threshold) {
+                new_markers[it->first] = it->second;
             }
         }
-    }
-
-    inline int getsegment(const double &d)
-    {
-        int s = corr_coeffs.size() / 2; //data x region
-        for (int i = 0; i < s; i++)
-        {
-            if (d < corr_coeffs[i]) return i;
-        }
-        return s;   //"invalid" X (out of data x range, but still in array)
-    }
-
-    void correctpt(geometry_msgs::msg::Point &p)
-    {
-        double r = sqrt(p.x * p.x + p.y * p.y); //distance (radial coordinate)
-        int i = getsegment(r);                  //get relevant line segment of correction function
-        int h = corr_coeffs.size() / 2;         //offset (data x range -> data y range)
-        double d;                               //difference
-        if (i)
-        {
-            if (i == h)             //if out of data x region (farther than last measurement dist.)
-                d = corr_coeffs[h+i-1]; //if farther than last measurement -> correct by last msmt.
-            else                                            //linear interpolation
-            {
-                d = (r - corr_coeffs[i-1]) *                //X
-                (corr_coeffs[h+i] - corr_coeffs[h+i-1])     //delta Y
-                / (corr_coeffs[i] - corr_coeffs[i-1])       //delta X
-                + corr_coeffs[h+i-1];                       //Y0
-            }
-        }
-        else d = corr_coeffs[h];    //if closer than 1st measurement dist. -> correct by 1st msmt.
-        d *= 1 / r;         //per given distance (-> becomes direct coefficient for coordinates)
-        p.x -= d * p.x;     //subtract x component of difference (error) from x
-        p.y -= d * p.y;     //subtract y component of difference (error) from y
+        markers.swap(new_markers);
     }
 
     void publish_markers(const std::unordered_map<std::string, MarkerInfo>& markers,
-                         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher,
-                         std::set<int>& active_marker_ids) {
+                         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher) {
         visualization_msgs::msg::MarkerArray marker_array;
-
-        for (int stale_id : active_marker_ids) {
-            visualization_msgs::msg::Marker marker;
-            marker.action = visualization_msgs::msg::Marker::DELETE;
-            marker.id = stale_id;
-            marker_array.markers.push_back(marker);
-        }
-
         static int id_counter = 0;
+        static std::set<int> active_marker_ids;
 
+        //clear func
+        for (int active_id : active_marker_ids) {
+            visualization_msgs::msg::Marker delete_marker;
+            delete_marker.header.frame_id = "laser_sensor_frame";
+            delete_marker.action = visualization_msgs::msg::Marker::DELETE;
+            delete_marker.id = active_id;
+            marker_array.markers.push_back(delete_marker);
+        }
+        active_marker_ids.clear();
+
+        //publish new markers
         for (const auto& [marker_id, marker_info] : markers) {
             visualization_msgs::msg::Marker marker;
             marker.header.frame_id = "laser_sensor_frame";
@@ -277,15 +219,15 @@ private:
             marker.color.a = 1.0;
             marker.id = id_counter++;
 
-            if (publisher == publisher_yellow_) {
+            if (marker_info.cone_id == 1) {
                 marker.color.r = 1.0;
                 marker.color.g = 1.0;
                 marker.color.b = 0.3;
-            } else if (publisher == publisher_orange_) {
+            } else if (marker_info.cone_id == 3) {
                 marker.color.r = 1.0;
                 marker.color.g = 0.5;
                 marker.color.b = 0.1;
-            } else if (publisher == publisher_blue_) {
+            } else if (marker_info.cone_id == 2) {
                 marker.color.r = 0.0;
                 marker.color.g = 0.0;
                 marker.color.b = 1.0;
@@ -296,17 +238,14 @@ private:
             marker.pose.position.z = marker_info.position[2];
             //correctpt(marker.pose.position);                    //correct deprojection error
             marker_array.markers.push_back(marker);
-        }
-
-        active_marker_ids.clear();
-        for (const auto& marker : marker_array.markers) {
             active_marker_ids.insert(marker.id);
         }
+
         publisher->publish(marker_array);
     }
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<DeprojectionNode>());
     rclcpp::shutdown();
