@@ -33,11 +33,15 @@ class FliterVehicle : public rclcpp::Node
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << param.get_value<std::string>());
             }
-            if (param.get_name() == "cam_cones_topic")
+            else if (param.get_name() == "cam_cones_topic")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << param.get_value<std::string>());
             }
-            if (param.get_name() == "output_frame")
+            else if (param.get_name() == "output_topic")
+            {
+                RCLCPP_INFO_STREAM(this->get_logger(), "output_cloud_topic: " << param.get_value<std::string>());
+            }
+            else if (param.get_name() == "output_frame")
             {
                 RCLCPP_INFO_STREAM(this->get_logger(), "output_frame: " << param.get_value<std::string>());
             }
@@ -96,6 +100,7 @@ public:
         // parameters
         this->declare_parameter<std::string>("cloud_in_topic", "input_cloud");
         this->declare_parameter<std::string>("cam_cones_topic", "input_cones");
+        this->declare_parameter<std::string>("output_topic", "cloud_prefiltered");
         this->declare_parameter<std::string>("output_frame", "base_link");
         this->declare_parameter<bool>("verbose1", false);
         this->declare_parameter<bool>("verbose2", true);
@@ -110,6 +115,7 @@ public:
 
         this->get_parameter("cloud_in_topic", cloud_in_topic);
         this->get_parameter("cam_cones_topic", cam_cones_topic);
+        this->get_parameter("output_topic", output_topic);
         this->get_parameter("output_frame", output_frame);
         this->get_parameter("verbose1", verbose1);
         this->get_parameter("verbose2", verbose2);
@@ -123,7 +129,7 @@ public:
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-        pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar_filter_output", 10);
+        pub_lidar_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(output_topic, 10);
         sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(cloud_in_topic,
             rclcpp::SensorDataQoS().keep_last(1), std::bind(&FliterVehicle::lidar_callback, this, std::placeholders::_1));
         sub_cam_cones_ = this->create_subscription<visualization_msgs::msg::MarkerArray>(cam_cones_topic,
@@ -133,6 +139,8 @@ public:
         RCLCPP_INFO(this->get_logger(), "FliterVehicle node has been started.");
         RCLCPP_INFO_STREAM(this->get_logger(), "cloud_in_topic: " << this->get_parameter("cloud_in_topic").as_string());
         RCLCPP_INFO_STREAM(this->get_logger(), "cam_cones_topic: " << this->get_parameter("cam_cones_topic").as_string());
+        RCLCPP_INFO_STREAM(this->get_logger(), "output_topic: " << this->get_parameter("output_topic").as_string());
+        RCLCPP_INFO_STREAM(this->get_logger(), "output_frame: " << this->get_parameter("output_frame").as_string());
         printcfg_b();   //show info about pcl boundary cropping ("trimming" of the points too far)
         printcfg_a();   //show info about pcl array cropping (~=shape of the vehicle to be removed)
     }
@@ -318,6 +326,7 @@ private:
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr callback_handle_;
     std::string cloud_in_topic = "pointcloud_topic";
     std::string cam_cones_topic = "cone_coordinates";
+    std::string output_topic = "cloud_prefiltered";
     std::string output_frame = "base_link";
 
     geometry_msgs::msg::TransformStamped tf;
