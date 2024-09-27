@@ -9,26 +9,26 @@ class ConeRefinementNode(Node):
 
     def __init__(self):
         super().__init__('cone_refinement_node')
-
+        print("fut")
         self.subscription_pc = self.create_subscription(
             MarkerArray,
             'pc_markers',
             self.pc_callback,
             10)
 
-        # Az összes bólyát egy topicról olvassuk be
+
         self.subscription_cones = self.create_subscription(
             MarkerArray,
             'deproj_cones',
             self.cones_callback,
             10)
 
-        # Az összes refined bólyát egyetlen topicra publikáljuk
+
         self.valid_cones_pub = self.create_publisher(MarkerArray, 'valid_deproj_cones', 10)
         self.object_pub = self.create_publisher(Marker, 'distance_correspondences', 10)
 
         self.pc_positions = None
-        self.cone_markers = None  # Az összes bólya (kék, sárga, narancs)
+        self.cone_markers = None 
 
     def pc_callback(self, msg):
         self.pc_positions = np.array(
@@ -39,25 +39,31 @@ class ConeRefinementNode(Node):
         self.cone_markers = msg
         if self.pc_positions is not None:
             self.refine_cones()
-
     def refine_cones(self):
         if self.cone_markers is None:
             return
 
-        # Bólyák szétválasztása szín szerint
+        delete_markers = MarkerArray()
+        for marker in self.cone_markers.markers:
+            delete_marker = Marker()
+            delete_marker.id = marker.id
+            delete_marker.action = Marker.DELETE
+            delete_markers.markers.append(delete_marker)
+
+        self.valid_cones_pub.publish(delete_markers)
         blue_markers = MarkerArray()
         yellow_markers = MarkerArray()
         orange_markers = MarkerArray()
 
         for marker in self.cone_markers.markers:
-            if marker.color.b == 1.0:  # Kék bólya
+            if marker.color.b == 1.0:  #b
                 blue_markers.markers.append(marker)
-            elif marker.color.r == 1.0 and marker.color.g == 1.0:  # Sárga bólya
+            elif marker.color.r == 1.0 and marker.color.g == 1.0:  #y
                 yellow_markers.markers.append(marker)
-            elif marker.color.r == 1.0 and marker.color.g == 0.5:  # Narancssárga bólya
+            elif marker.color.r == 1.0 and marker.color.g == 0.5:  #o
                 orange_markers.markers.append(marker)
 
-        # Egy közös refined_markers listába rakjuk a refined bólyákat
+        
         refined_markers = MarkerArray()
 
         if blue_markers.markers:
@@ -72,7 +78,7 @@ class ConeRefinementNode(Node):
             refined_orange = self.refine_cone_markers(orange_markers)
             refined_markers.markers.extend(refined_orange.markers)
 
-        # Publikáljuk az összes refined bólyát egyetlen topicra
+        
         self.valid_cones_pub.publish(refined_markers)
 
     def refine_cone_markers(self, cone_markers):
@@ -124,7 +130,6 @@ class ConeRefinementNode(Node):
         object_marker.scale.y = 0.02
         object_marker.scale.z = 3.0
 
-        # Színek beállítása típus szerint
         if cone_type == 'blue':
             object_marker.color.r = 0.0
             object_marker.color.g = 0.0
