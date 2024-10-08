@@ -29,7 +29,7 @@ class ConeDetectorRosNode(Node):
                 parameters=[
                     ("/cone_detector/lidar_input_topic", '/points'),
                     ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-dcn_8xb4-cyclic-20e_nus-3d.py'),
-                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/CenterPoint/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_nuscenes/centerpoint_02pillar_second_secfpn_dcn_4x8_cyclic_20e_nus_20220811_045458-808e69ad.pth'),
+                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_nuscenes/centerpoint_02pillar_second_secfpn_dcn_4x8_cyclic_20e_nus_20220811_045458-808e69ad.pth'),
                 ],
             )
 
@@ -48,7 +48,7 @@ class ConeDetectorRosNode(Node):
     def yaw2quaternion(self, yaw: float) -> Quaternion:
         return Quaternion(axis=[0,0,1], radians=yaw)
     
-    def get_xyz_points(self, cloud_array, remove_nans=True, dtype=float):
+    def get_xyz_points(self, cloud_array: dict, remove_nans=True, dtype=float) -> np.ndarray:
         '''
         '''
         # if remove_nans:
@@ -62,7 +62,7 @@ class ConeDetectorRosNode(Node):
         points[...,3] = cloud_array['intensity']
         return points
 
-    def run_detector(self, input_pcl: np.array):
+    def run_detector(self, input_pcl: np.array) -> np.ndarray:
         def get_annotations_indices(types, thresh, label_preds, scores):
             indexs = []
             annotation_indices = []
@@ -74,7 +74,7 @@ class ConeDetectorRosNode(Node):
                     annotation_indices.append(index)
             return annotation_indices
         
-        def remove_low_score_nu(image_anno):
+        def remove_low_score_nu(image_anno: dict) -> dict:
             img_filtered_annotations = {}
             label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
             scores_ = image_anno["scores_3d"].detach().cpu().numpy()

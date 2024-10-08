@@ -54,7 +54,9 @@ pip install -e .
 cd ..
 pip install cumm-cu118
 pip install spconv-cu118
+pip install ros2-numpy
 
+# ----------- BELOW IS NOT IN USE YET, SO IT IS OPTIONAL -----------------
 # Install mmdeploy
 git clone -b main https://github.com/open-mmlab/mmdeploy.git
 
@@ -62,7 +64,6 @@ pip install mmdeploy==1.3.1
 # for inferencing with onnxruntime-gpu, tensorrt
 pip install mmdeploy-runtime-gpu==1.3.1
 
-# ----------- BELOW IS OPTIONAL -----------------
 # Install tensorrt
 wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/8.6.1/tars/TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
 tar -xvzf TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
@@ -89,7 +90,7 @@ pip install transforms3d
 
 Build the package
 ```
-colcon build --packages-select lidar_centerpoint_detector
+colcon build --symlink-install --packages-select lidar_centerpoint_detector
 ```
 
 
