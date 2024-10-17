@@ -13,6 +13,78 @@ from visualization_msgs.msg import Marker, MarkerArray
 from builtin_interfaces.msg import Duration
 
 
+def get_annotations_indices(types, thresh, label_preds, scores):
+                indexs = []
+                annotation_indices = []
+                for i in range(len(label_preds)):
+                    if label_preds[i] == types:
+                        indexs.append(i)
+                for index in indexs:
+                    if scores[index] >= thresh:
+                        annotation_indices.append(index)
+                return annotation_indices
+
+def remove_low_score_nu(image_anno: dict) -> dict:
+    img_filtered_annotations = {}
+    label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
+    scores_ = image_anno["scores_3d"].detach().cpu().numpy()
+    
+    # car_indices =                  get_annotations_indices(0, 0.4, label_preds_, scores_)
+    # truck_indices =                get_annotations_indices(1, 0.4, label_preds_, scores_)
+    # construction_vehicle_indices = get_annotations_indices(2, 0.4, label_preds_, scores_)
+    # bus_indices =                  get_annotations_indices(3, 0.3, label_preds_, scores_)
+    # trailer_indices =              get_annotations_indices(4, 0.4, label_preds_, scores_)
+    # barrier_indices =              get_annotations_indices(5, 0.4, label_preds_, scores_)
+    # motorcycle_indices =           get_annotations_indices(6, 0.15, label_preds_, scores_)
+    # bicycle_indices =              get_annotations_indices(7, 0.15, label_preds_, scores_)
+    # pedestrain_indices =           get_annotations_indices(8, 0.1, label_preds_, scores_)
+    traffic_cone_indices =           get_annotations_indices(9, 0.4, label_preds_, scores_)
+    
+    for key in image_anno.keys():
+        if key == 'box_type_3d':
+            continue
+        # img_filtered_annotations[key] = (
+        #     image_anno[key][car_indices +
+        #                     pedestrain_indices + 
+        #                     bicycle_indices +
+        #                     bus_indices +
+        #                     construction_vehicle_indices +
+        #                     traffic_cone_indices +
+        #                     trailer_indices +
+        #                     barrier_indices +
+        #                     truck_indices
+        #                     ])
+        img_filtered_annotations[key] = (
+            image_anno[key].detach().cpu().numpy()[
+                            traffic_cone_indices
+                            ])
+
+    return img_filtered_annotations
+
+def remove_low_score_cone(image_anno: dict) -> dict:
+    img_filtered_annotations = {}
+    label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
+    scores_ = image_anno["scores_3d"].detach().cpu().numpy()
+
+    cone_yellow = get_annotations_indices(0, 0.45, label_preds_, scores_)
+    cone_blue = get_annotations_indices(1, 0.45, label_preds_, scores_)
+    cone_orange = get_annotations_indices(2, 0.45, label_preds_, scores_)
+    cone_big = get_annotations_indices(3, 0.45, label_preds_, scores_)
+    
+    for key in image_anno.keys():
+        if key == 'box_type_3d':
+            continue
+        img_filtered_annotations[key] = (
+            image_anno[key].detach().cpu().numpy()[
+                            cone_yellow +
+                            cone_blue +
+                            cone_orange +
+                            cone_big
+                            ])
+
+    return img_filtered_annotations
+
+
 class ConeDetectorRosNode(Node):
     def __init__(self) -> None:
         super().__init__("cone_detector_node")
@@ -28,8 +100,9 @@ class ConeDetectorRosNode(Node):
                 namespace="",
                 parameters=[
                     ("/cone_detector/lidar_input_topic", '/points'),
-                    ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-dcn_8xb4-cyclic-20e_nus-3d.py'),
-                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_nuscenes/centerpoint_02pillar_second_secfpn_dcn_4x8_cyclic_20e_nus_20220811_045458-808e69ad.pth'),
+                    ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-dcn_8xb4-cyclic-20e_cone-3d.py'),
+                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_conescenes/epoch_20_pretrained.pth'),
+                    ("/cone_detector/dataset", 'cone'), # only 'cone' or 'nus' are supported
                 ],
             )
 
@@ -55,7 +128,12 @@ class ConeDetectorRosNode(Node):
         mask = np.isfinite(cloud_array['x']) & np.isfinite(cloud_array['y']) & np.isfinite(cloud_array['z'])
         cloud_array = cloud_array[mask]
 
-        points = np.zeros(cloud_array.shape + (5,), dtype=dtype)
+        # shape depends on the num_dim the model was trained on
+        if self.get_parameter("/cone_detector/dataset").value == 'cone':
+            points = np.zeros(cloud_array.shape + (4,), dtype=dtype)
+        elif self.get_parameter("/cone_detector/dataset").value == 'nus':
+            points = np.zeros(cloud_array.shape + (5,), dtype=dtype)
+
         points[...,0] = cloud_array['x']
         points[...,1] = cloud_array['y']
         points[...,2] = cloud_array['z']
@@ -63,57 +141,12 @@ class ConeDetectorRosNode(Node):
         return points
 
     def run_detector(self, input_pcl: np.array) -> np.ndarray:
-        def get_annotations_indices(types, thresh, label_preds, scores):
-            indexs = []
-            annotation_indices = []
-            for i in range(len(label_preds)):
-                if label_preds[i] == types:
-                    indexs.append(i)
-            for index in indexs:
-                if scores[index] >= thresh:
-                    annotation_indices.append(index)
-            return annotation_indices
-        
-        def remove_low_score_nu(image_anno: dict) -> dict:
-            img_filtered_annotations = {}
-            label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
-            scores_ = image_anno["scores_3d"].detach().cpu().numpy()
-            
-            # car_indices =                  get_annotations_indices(0, 0.4, label_preds_, scores_)
-            # truck_indices =                get_annotations_indices(1, 0.4, label_preds_, scores_)
-            # construction_vehicle_indices = get_annotations_indices(2, 0.4, label_preds_, scores_)
-            # bus_indices =                  get_annotations_indices(3, 0.3, label_preds_, scores_)
-            # trailer_indices =              get_annotations_indices(4, 0.4, label_preds_, scores_)
-            # barrier_indices =              get_annotations_indices(5, 0.4, label_preds_, scores_)
-            # motorcycle_indices =           get_annotations_indices(6, 0.15, label_preds_, scores_)
-            # bicycle_indices =              get_annotations_indices(7, 0.15, label_preds_, scores_)
-            # pedestrain_indices =           get_annotations_indices(8, 0.1, label_preds_, scores_)
-            traffic_cone_indices =           get_annotations_indices(9, 0.4, label_preds_, scores_)
-            
-            for key in image_anno.keys():
-                if key == 'box_type_3d':
-                    continue
-                # img_filtered_annotations[key] = (
-                #     image_anno[key][car_indices +
-                #                     pedestrain_indices + 
-                #                     bicycle_indices +
-                #                     bus_indices +
-                #                     construction_vehicle_indices +
-                #                     traffic_cone_indices +
-                #                     trailer_indices +
-                #                     barrier_indices +
-                #                     truck_indices
-                #                     ])
-                img_filtered_annotations[key] = (
-                    image_anno[key].detach().cpu().numpy()[
-                                    traffic_cone_indices
-                                    ])
-
-            return img_filtered_annotations
-        
         pred_results, _ = inference_detector(self.model, input_pcl)
 
-        pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
+        if self.get_parameter("/cone_detector/dataset").value == 'cone':
+            pred_dict_filtered = remove_low_score_cone(pred_results.to_dict()["pred_instances_3d"])
+        elif self.get_parameter("/cone_detector/dataset").value == 'nus':
+            pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
 
         return pred_dict_filtered['scores_3d'], pred_dict_filtered['bboxes_3d'], pred_dict_filtered['labels_3d']
 
@@ -161,7 +194,7 @@ class ConeDetectorRosNode(Node):
                     marker.color.b = 0.0
                 elif int(types[i]) == 7:
                     marker.color.r = 0.0
-                    marker.color.g = 0.0
+                    marker.color.g = 0.5
                     marker.color.b = 1.0
                 elif int(types[i]) == 6:
                     marker.color.r = 1.0
@@ -176,21 +209,21 @@ class ConeDetectorRosNode(Node):
                     marker.color.g = 1.0
                     marker.color.b = 1.0
                 elif int(types[i]) == 3:
-                    marker.color.r = 0.5
-                    marker.color.g = 0.5
-                    marker.color.b = 0.5
-                elif int(types[i]) == 2:
-                    marker.color.r = 0.5
+                    marker.color.r = 1.0
                     marker.color.g = 0.0
+                    marker.color.b = 0.0
+                elif int(types[i]) == 2:
+                    marker.color.r = 1.0
+                    marker.color.g = 0.65
                     marker.color.b = 0.0
                 elif int(types[i]) == 1:
                     marker.color.r = 0.0
-                    marker.color.g = 0.5
-                    marker.color.b = 0.0
-                elif int(types[i]) == 0:
-                    marker.color.r = 0.0
                     marker.color.g = 0.0
-                    marker.color.b = 0.5
+                    marker.color.b = 1.0
+                elif int(types[i]) == 0:
+                    marker.color.r = 1.0
+                    marker.color.g = 1.0
+                    marker.color.b = 0.0
                 else:
                     marker.color.r = 1.0
                     marker.color.g = 1.0
