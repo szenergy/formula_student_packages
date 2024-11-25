@@ -15,13 +15,15 @@ import argparse
 import json
 import hashlib
 
-reqdirs = ["unlabeled_pc", "points", "labels"]
+reqdirs = ["unlabeled_pc", "points", "labels", "ImageSets"]
+datasets = ["train.txt", "val.txt", "test.txt"]
 label_every = 10
+ratio = [1, 1, 1]
 
 meta_dict = {
     "info": {
         "tool": "mcap_extract.py",
-        "version": "0.1",
+        "version": "0.2",
         "description": "Generated from MCAP file",
         "generated_on": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "last_updated": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -101,20 +103,35 @@ def main():
         "file_in", help = "input bag path (folder or filepath) to read from"
     )
     parser.add_argument(
-        "odom_in", help = "name of the odom topic to use"
-    )
-    parser.add_argument(
         "pcl_in", help = "name of the pointcloud to use"
     )
     parser.add_argument(
-        "--dir_out", default = "", #required = False,
+        "odom_in", help = "name of the odom topic to use"
+    )
+    parser.add_argument(
+        "--dir_out", default = "", required = False,
         help = "[optional] output directory - if unspecified, input folder will be used"
+    )
+    parser.add_argument(
+        "--ratio", default = "", required = False, nargs = 3,
+        help = "[optional] ratio of 'train', 'test' and 'validate' data to sort the output into"
     )
     
     args = parser.parse_args()
     if (args.dir_out == ""):
-        dir_out = os.path.dirname(args.file_in)
-    else: dir_out = args.dir_out
+        dir_out = os.path.dirname(args.file_in) # todo: check existance
+    else: dir_out = args.dir_out # todo: handle directory-as-input
+
+    ratio = [1,1,1]
+    if (len(args.ratio) == 3):
+        print(args.ratio)
+        s = 0
+        for i in range(3):
+            ratio[i] = float(args.ratio[i]) # conversion
+            s += ratio[i]
+        ratio = list(map(lambda x: x/s, ratio))
+    elif (len(args.ratio)): # (if 0 < input != 3)
+        print("ERROR!") # todo: specify (+ suggest?)
 
     manage_dirs(dir_out)
     
@@ -125,11 +142,9 @@ def main():
         print("Processing mcap...")
         reader, pcl_count, odom_count, msg_count = init_reader(args.file_in, args.pcl_in, args.odom_in)
         pcl_timestamps = {}
-        #pcl_hashes = []
         odom_data = []
         cnt = 1
         for topic, msg, timestamp in read_messages(reader):
-            #if (cnt > 1000): break #todo: remove (...DUH!)
             if isinstance(msg, PointCloud2):
                 pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
                 pointcloud_np = np.stack([pointcloud_np_structured['x'],
@@ -139,14 +154,13 @@ def main():
                 if (len(pcl_timestamps) % label_every): # has remainder (unlabeled)
                     suffix = f"_{(len(pcl_timestamps) % label_every)}" # suffix = remainder
                 else: suffix = ""
-                fname = f"{((len(pcl_timestamps) // label_every) +1 ):06d}{suffix}"
+                fname = f"{((len(pcl_timestamps) // label_every) +1 ):07d}{suffix}"
                 pcl_timestamps[fname] = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
                 if len(suffix): fname = f"{dir_out}/unlabeled_pc/{fname}.bin" # add path and suffix (for unlabeled)
                 else: fname = f"{dir_out}/points/{fname}.bin" # add path and suffix (for labeled)
                 with open(fname, 'wb') as f:
                     b = pointcloud_np.tobytes() # todo: compare with inline performance
                     f.write(b)
-                    #pcl_hashes[fname] = hashlib.md5(b).hexdigest()
             elif isinstance(msg, Odometry):
                 o = msg.pose.pose.orientation
                 x, y, z, w = o.x, o.y, o.z, o.w
@@ -161,7 +175,7 @@ def main():
                     "vy": msg.twist.twist.linear.y,
                     "yawrate": msg.twist.twist.angular.z
                 })
-            sys.stdout.write(f"\rMessages processed:\t- total: {cnt :6d} / {msg_count :6d}\t(pcl: {len(pcl_timestamps) :6d} / {pcl_count :6d}, odom: {len(odom_data) :6d} / {odom_count :6d})")
+            sys.stdout.write(f"\rMessages processed:\t- total: {cnt :7d} / {msg_count :7d}\t(pcl: {len(pcl_timestamps) :7d} / {pcl_count :7d}, odom: {len(odom_data) :7d} / {odom_count :7d})")
             sys.stdout.flush()
             cnt += 1
         print("\n...mcap processing done.")
@@ -207,7 +221,7 @@ def main():
                        },
                        "unlabeled_clouds": []
                     })
-            sys.stdout.write(f"\rFiles processed:\t {cnt :6d} / {len(bin_files) :6d}")
+            sys.stdout.write(f"\rFiles processed:\t {cnt :7d} / {len(bin_files) :7d}")
             sys.stdout.flush()
             cnt += 1
         print("\n...file processing done.")
@@ -220,27 +234,17 @@ def main():
     else:
         print("Metadata file found, updating label checksums...")
         src_files = os.listdir(f"{dir_out}/points/")
-        
-        #DEBUG: fake txt generation
-        """
-        for i in src_files:
-            id = i.split('.')[0]
-            with open(f"{dir_out}/labels/{id}.txt", "w") as f:
-                f.write(i)
-        """
-
         txt_files = os.listdir(f"{dir_out}/labels/")
         if (len(src_files)==len(txt_files)):
             lbl_hashes = {}
             for i in (txt_files):
-                id = i.split('.')[0]
+                id = i[:-4]
                 if not os.path.isfile(f"{dir_out}/labels/{id}.txt"):
                     print(f"Missing: 'labels/{id}.txt'.")
                 else:
                     with open(f"{dir_out}/labels/{i}", "rb") as f:
                         b = f.read()
                         lbl_hashes[id] = hashlib.md5(b).hexdigest()
-            lbl_hashes = lbl_hashes
             
             with open(f"{dir_out}/metadata.json", "r") as f:
                 meta_in = json.load(f)
@@ -251,13 +255,23 @@ def main():
             with open(f"{dir_out}/metadata.json", "w") as f:
                 json.dump(meta_in, f, indent = 4)
             print("...data saved.")
-            print("Done.")
+            
+            print("Writing IDs to the corresponding files by the given dataset ratio...")
+            for i in range(len(datasets)):
+                with open(f"{dir_out}/ImageSets/{datasets[i]}", "w") as f:
+                    for j in np.arange(i, len(txt_files), 1/ratio[i]):
+                        f.write( txt_files[int(j)][:-4] + '\n')
+                    print(f"- file '{dir_out}/ImageSets/{datasets[i]}' created.")
+            print("...files created, IDs allocated.")
+                
+            print("All done.")
             print("The data is ready for use.")
             
         else:
-            print("Something don't feel right with them files!"
+            print("The files in the /labels/ folder do not match their binary counterparts!"
                   " (make sure that for every '.bin' file in the '/points/' folder"
-                  "there is a '.txt' file [containing the labels] in the '/labels/' folder!)")
+                  "there is a '.txt' file [containing the labels] in the '/labels/' folder"
+                  "and that there are no other files present!)")
             #todo: try to resolve, check for errors, etc.
 
 if __name__ == "__main__":

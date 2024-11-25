@@ -1,34 +1,48 @@
 # mcap_extract usage
-## requirements
+(short summary at bottom)
+## Requirements
 You are going to need:
 - a valid ros2 distribution (properly installed and configured)
-- an '.mcap' file with pointcloud and odometry data in it
+- an '.mcap' file with pointcloud and odometry data in it (*sensor_msgs/PointCloud2* and *nav_msgs/Odometry*, respectively)
 - some space for the output (roughly the same as the pcl and odom data in the mcap)
 
-## command line usage
-example: "mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory"
-note: if no output directory is specified, the input directory will be used
+## Command line usage
+example:
+    **mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory --ratio 2 3 2.5**
+notes:
+- if no output directory is specified, the input directory will be used
+- the required topic types for pcl and odom are *sensor_msgs/PointCloud2* and *nav_msgs/Odometry*, respectively
+- the ratio [optional argument] refers to how the data will be divided into 'train', 'validate' and 'test' datasets (respectively)
+    - it is renormalized, so any valid integers and floats can be used
+    - the default is setting is 1:1:1
 
-## output
+## Output
 ### What you get:
 
-#### [1st execution]
-3 subdirectories:
-- labels
-- points
-- unlabeled_pc
+#### [ 1st execution ]
+- 4 subdirectories:
+    - ImageSets/
+    - labels/
+    - points/
+    - unlabeled_pc/  
 (The latter 2 containing the pcl data in '.bin' format)
 
-1 file:
-- metadata.json
-#### [2nd execution]
-updated checksums in your metadata file
+- 1 file:
+    - metadata.json
+
+#### [ 2nd execution ]
+- *updated checksums in your metadata file*
+- +3 files:
+    - ImageSets/train.txt
+    - ImageSets/val.txt
+    - ImageSets/test.txt
+(containing the IDs/filenames of the pcl, grouped/divided by the given ratio as the different datasets/categories)
 
 ### What to do with it:
-All the '.bin' files in the 'points' directory need to be labeled...
-...the labels need to be in '.txt' format [todo: explain the format in detail]
+All the '.bin' files in the 'points' directory need to be labeled...  
+The labels need to be in '.txt' format [todo: explain the format in detail]  
 After the labeling is done (using a 3rd party software) and exported into the '/labels/' directory,
-the script needs to be run again [todo: different (optional) command line arguments for 2nd execution]
+the script needs to be run again [todo: different (optional) command line arguments for 2nd execution]  
 notes:
 - currently it needs the same arguments as input for the 2nd execution, but the mcap will be completely ignored
 - currently it lacks proper error handling, so:
@@ -36,13 +50,12 @@ notes:
     - the '.bin' and '.txt' files (their amount and names for each) has to be the same (in '/points/' and '/labels/', respectively)
     - all the files need to be intact (rerun, delete metadata beforehand, if necessary... all else can be kept - but the generated files will be reprocessed and overwritten)
 - the only difference that counts between the 2 executions is the existence of the metadata file
-- everything
 
 ## TL;DR:
-1. get ros2
-2. get mcap
+1. get ros2 (https://docs.ros.org/en/jazzy/Installation.html)
+2. get mcap (with pcl and odom data [https://mcap.dev/])
 3. run py (see: command line usage)
-4. recieve '*.bin's and 'metadata.json' (in output dir)
+4. recieve '*.bin' files and 'metadata.json' (in output dir)
 5. use something to annotate the '/points/*.bin' files
 6. export labels as '*.txt' to '/labels/' folder
 7. run script again (same command)
