@@ -9,11 +9,13 @@ You are going to need:
 
 ## Command line usage
 example:
-    **mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory --ratio 2 3 2.5**
+    **mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory --label-every 2 --precede_with 10 --ratio 2 3 2.5**
 notes:
 - if no output directory is specified, the input directory will be used
 - the required topic types for pcl and odom are *sensor_msgs/PointCloud2* and *nav_msgs/Odometry*, respectively
-- the ratio [optional argument] refers to how the data will be divided into 'train', 'validate' and 'test' datasets (respectively)
+- the *label_every* [optional argument] means which *bin* files (pointclouds) to mark as to-be-labeled - starting after 'precede_with'
+- the *precede_with* [optional argument] sets the number of preceding *bin* files (pointclouds) to assign to every labeled one as (preceding) unlabeled
+- the *ratio* [optional argument] refers to how the data will be divided into 'train', 'validate' and 'test' datasets (respectively)
     - it is renormalized, so any valid integers and floats can be used
     - the default is setting is 1:1:1
 
@@ -54,7 +56,7 @@ notes:
 
 ## TL;DR:
 1. get ros2 (https://docs.ros.org/en/jazzy/Installation.html)
-2. get mcap (with pcl and odom data [https://mcap.dev/])
+2. get an mcap (with pcl and odom data [https://mcap.dev/])
 3. run py (see: command line usage) [install python if you do not have it]
 4. recieve '*.bin' files and 'metadata.json' (in output dir)
 5. use something to annotate the '/points/*.bin' files

@@ -9,6 +9,7 @@ from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as rot
 import os
 import sys
+import shutil
 import datetime as dt
 import getpass as gt
 import argparse
@@ -17,13 +18,12 @@ import hashlib
 
 reqdirs = ["unlabeled_pc", "points", "labels", "ImageSets"]
 datasets = ["train.txt", "val.txt", "test.txt"]
-label_every = 10
 ratio = [1, 1, 1]
 
 meta_dict = {
     "info": {
         "tool": "mcap_extract.py",
-        "version": "0.2",
+        "version": "0.3",
         "description": "Generated from MCAP file",
         "generated_on": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "last_updated": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -57,11 +57,10 @@ def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
     return cid
 
 def save_meta(meta_dict, dir_out):
-    print("Generating metadata file...")
     with open(f"{dir_out}/metadata.json", "w") as f:
         meta_dict["info"]["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        json.dump(meta_dict, f, indent=4)
-    print("...metadata file created.") #todo: check file
+        json.dump(meta_dict, f, indent = 4)
+    #print("...metadata file created.") #todo: check file
 
 def init_reader(input_bag: str, pcl_topic: str, odom_topic: str):
     reader = rosbag2_py.SequentialReader()
@@ -100,20 +99,28 @@ def main():
     print("Welcome to the annotation preprocessor! (MCAP to bin + folder structure + metadata.json)")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "file_in", help = "input bag path (folder or filepath) to read from"
+        "file_in", type = str, help = "input bag path (folder or filepath) to read from"
     )
     parser.add_argument(
-        "pcl_in", help = "name of the pointcloud to use"
+        "pcl_in", type = str, help = "name of the pointcloud to use"
     )
     parser.add_argument(
-        "odom_in", help = "name of the odom topic to use"
+        "odom_in", type = str, help = "name of the odom topic to use"
     )
     parser.add_argument(
-        "--dir_out", default = "", required = False,
+        "--dir_out", default = "", required = False, type = str,
         help = "[optional] output directory - if unspecified, input folder will be used"
     )
     parser.add_argument(
-        "--ratio", default = "", required = False, nargs = 3,
+        "--label_every", default = 2, required = False, type = int,
+        help = "[optional] label only every N-th cloud (starting after the 'precede_with')"
+    )
+    parser.add_argument(
+        "--precede_with", default = 10, required = False, type = int,
+        help = "[optional] assign (and copy) the previous N frames as 'unlabeled_pc'"
+    )
+    parser.add_argument(
+        "--ratio", default = [1.0, 1.0, 1.0], required = False, nargs = 3, type = float,
         help = "[optional] ratio of 'train', 'test' and 'validate' data to sort the output into"
     )
     
@@ -121,13 +128,15 @@ def main():
     if (args.dir_out == ""):
         dir_out = os.path.dirname(args.file_in) # todo: check existance
     else: dir_out = args.dir_out # todo: handle directory-as-input
+    
+    precede_with = abs(args.precede_with)
+    label_every = abs(args.label_every)
 
     ratio = [1,1,1]
     if (len(args.ratio) == 3):
-        print(args.ratio)
         s = 0
         for i in range(3):
-            ratio[i] = float(args.ratio[i]) # conversion
+            ratio[i] = abs(float(args.ratio[i])) # conversion
             s += ratio[i]
         ratio = list(map(lambda x: x/s, ratio))
     elif (len(args.ratio)): # (if 0 < input != 3)
@@ -141,7 +150,9 @@ def main():
         meta_dict["info"]["user"] = gt.getuser()
         print("Processing mcap...")
         reader, pcl_count, odom_count, msg_count = init_reader(args.file_in, args.pcl_in, args.odom_in)
-        pcl_timestamps = {}
+        m_l, p_l, o_l = len(str(msg_count)), len(str(pcl_count)), len(str(odom_count))
+        bin_files = []
+        pcl_timestamps = []
         odom_data = []
         cnt = 1
         for topic, msg, timestamp in read_messages(reader):
@@ -151,13 +162,10 @@ def main():
                             pointcloud_np_structured['y'],
                             pointcloud_np_structured['z'],
                             pointcloud_np_structured['intensity']], axis=-1)
-                if (len(pcl_timestamps) % label_every): # has remainder (unlabeled)
-                    suffix = f"_{(len(pcl_timestamps) % label_every)}" # suffix = remainder
-                else: suffix = ""
-                fname = f"{((len(pcl_timestamps) // label_every) +1 ):07d}{suffix}"
-                pcl_timestamps[fname] = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-                if len(suffix): fname = f"{dir_out}/unlabeled_pc/{fname}.bin" # add path and suffix (for unlabeled)
-                else: fname = f"{dir_out}/points/{fname}.bin" # add path and suffix (for labeled)
+                fname = f"{len(pcl_timestamps):07d}"
+                bin_files.append(fname)
+                pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+                fname = f"{dir_out}/points/{fname}"
                 with open(fname, 'wb') as f:
                     b = pointcloud_np.tobytes() # todo: compare with inline performance
                     f.write(b)
@@ -175,59 +183,117 @@ def main():
                     "vy": msg.twist.twist.linear.y,
                     "yawrate": msg.twist.twist.angular.z
                 })
-            sys.stdout.write(f"\rMessages processed:\t- total: {cnt :7d} / {msg_count :7d}\t(pcl: {len(pcl_timestamps) :7d} / {pcl_count :7d}, odom: {len(odom_data) :7d} / {odom_count :7d})")
+            sys.stdout.write(f"\rMessages processed:\t- total: {cnt :{m_l}d} / {msg_count :{m_l}d}"
+                             f"\t(pcl: {len(pcl_timestamps) :{p_l}d} / {pcl_count :{p_l}d},"
+                             f" odom: {len(odom_data) :{o_l}d} / {odom_count :{o_l}d})")
             sys.stdout.flush()
             cnt += 1
         print("\n...mcap processing done.")
 
-        print("Assigning timestamps... (odom -> pcl)")
-        bin_files = os.listdir(f"{dir_out}/points/") + os.listdir(f"{dir_out}/unlabeled_pc/")
-        filehash = ""
+        print("Assigning timestamps (odom -> pcl) and file hashes...")
+        stamps = []
+        hashes = []
         cnt = 1
+        f_l = len(str(len(bin_files)))
         for i in bin_files:
-            id = os.path.basename(i).split('.')[0] # filename that contains id
-            
-            # todo: check filename format
-            if (len(id) == 2 and id[1]==".bin") or True:
-                cf = id[0].split('_')
-                if (cf[0].isdecimal() and cf[-1].isdecimal()) or True: # confirmed
-                    if '_' in i: fdir = f"{dir_out}/unlabeled_pc" # add path for unlabeled
-                    else: fdir = f"{dir_out}/points" # add path for [to be] labeled
-                    with open(f"{fdir}/{i}", "rb") as f: # ...extract hash
-                        b = f.read()
-                        filehash = hashlib.md5(b).hexdigest()
-                else: continue # denied: skip file
-            else: continue # denied: skip file
-            
-            if ('_' in id):
-                meta_dict["data"][int(id.split('_')[0])-1]["unlabeled_clouds"].append(
-                    {
-                        "file": f"unlabeled_pc/{id}.bin",
-                        "checksum": filehash,
-                        "odom": odom_data[get_closest_stamp_id(pcl_timestamps[id], odom_data)]
-                    }
-                )
-            else:
-                meta_dict["data"].append({
-                        "id": int(id),
-                        "odom": odom_data[get_closest_stamp_id(pcl_timestamps[id], odom_data)],
-                        "pointcloud": {
-                            "file": f"points/{id}.bin",
-                            "checksum": filehash,
-                        },
-                       "labels": {
-                           "file": f"labels/{id}.txt",
-                           "checksum": "",
-                       },
-                       "unlabeled_clouds": []
-                    })
-            sys.stdout.write(f"\rFiles processed:\t {cnt :7d} / {len(bin_files) :7d}")
+            id = int(os.path.basename(i))
+            stamps.append(odom_data[get_closest_stamp_id(pcl_timestamps[id], odom_data)])
+            with open(f"{dir_out}/points/{i}", "rb") as f: # ...extract hash
+                b = f.read()
+                hashes.append(hashlib.md5(b).hexdigest())
+            sys.stdout.write(f"\rFiles processed: {cnt :{f_l}d} / {len(bin_files) :{f_l}d}")
             sys.stdout.flush()
             cnt += 1
-        print("\n...file processing done.")
-        print("Saving metadata to json file...")
-        save_meta(meta_dict, dir_out)
-        print("...data saved.")
+        print("\n...data assigned.")
+        print("Generating layout links...")
+        label_files = []
+        link_fwd = {}
+        link_bwd = {}
+        bid = 1
+        for i in range(precede_with, len(bin_files), label_every):
+            for j in range(precede_with):
+                current_file = f"{dir_out}/points/{i - precede_with + j :07d}"
+                result_file = f"{dir_out}/unlabeled_pc/{bid :07d}_{j+1}.bin"
+                if current_file in link_fwd:
+                    link_fwd[current_file].append(result_file)
+                else: link_fwd[current_file] = [result_file]
+                link_bwd[result_file] = current_file
+            bid += 1
+            label_files.append(f"{dir_out}/points/{i :07d}")
+        print("Generating metadata...")
+        for id in range(1, len(label_files)+1):
+            oid = (id - 1) * label_every + precede_with # original id (of the unsorted files)
+            meta_dict["data"].append({
+                "id": id,
+                "odom": stamps[oid],
+                "pointcloud": {
+                    "file": f"points/{id :07d}.bin",
+                    "checksum": hashes[oid],
+                },
+                "labels": {
+                    "file": f"labels/{id :07d}.txt",
+                    "checksum": "",
+                },
+                "unlabeled_clouds": []
+            })
+            for i in range(precede_with):
+                ucid = oid - precede_with + i
+                meta_dict["data"][-1]["unlabeled_clouds"].append(
+                    {
+                        "file": f"unlabeled_pc/{id :07d}_{i+1}.bin",
+                        "checksum": hashes[ucid],
+                        "odom": stamps[ucid]
+                    }
+                )
+        print("...metadata generated, saving...")
+        save_meta(meta_dict,dir_out)
+        print(f"... 'metadata.json' saved to: '{dir_out}'.")
+
+        print("Rearranging files...")
+        print("...duplicating 'unlabeled'...") #todo: if duplication is not needed  (-?)
+        tot, ctot, c = 0, 1, 1 # total, and counters
+        kl = len(link_fwd.keys())
+        for i in link_fwd.keys():
+            tot += len(link_fwd[i])
+        c_l, tot_l = len(str(kl)), len(str(tot)) # format length
+
+        for i in link_fwd.keys():
+            l = len(link_fwd[i])
+            l_l = len(str(l))
+            p = 1
+            for j in link_fwd[i]:
+                shutil.copy2(i, j)
+                sys.stdout.write(f"\r - files copied: {ctot :{tot_l}d} / {tot :{tot_l}d}"
+                                 f"\t[ file #{c :{c_l}d} / {kl :{c_l}d} "
+                                 f"-> duplicate #{p :{l_l}d} / {l :{l_l}d} ]")
+                sys.stdout.flush()
+                p += 1
+                ctot += 1
+            c += 1
+        
+        print("\n...renaming files...")
+        id = 1
+        tot = len(label_files)
+        tot_l = len(str(tot))
+        for i in label_files:
+            os.rename(f"{i}", f"{dir_out}/points/{id :07d}.bin")
+            sys.stdout.write(f"\r - files renamed: {id :{tot_l}d} / {tot :{tot_l}d}")
+            sys.stdout.flush()
+            id += 1
+
+        print("\n...removing excess files...")
+        cnt = 0
+        tot = len(bin_files) - len(label_files)
+        l = len(str(tot))
+        for i in bin_files:
+            i = f"{dir_out}/points/{i}"
+            if os.path.isfile(i):
+                os.remove(i)
+                cnt += 1
+            sys.stdout.write(f"\r - files removed: {cnt :{l}d} / {tot :{l}d}")
+            sys.stdout.flush()
+        print("\n...excess files removed.")
+
         print("Done.")
         print("(Run this script again once you have all the labels"
               " in the '/labels/' folder of your output directory!)")
