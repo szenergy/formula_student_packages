@@ -9,7 +9,7 @@ You are going to need:
 
 ## Command line usage
 example:
-    **mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory --label-every 2 --precede_with 10 --ratio 2 3 2.5**
+    **mcap_extractor.py /your_pcl_topic /your_odom_topic --out-dir /someplace/your/output_directory --label-every 2 --precede_with 10 --ratio 2 3 2.5**  
 notes:
 - if no output directory is specified, the input directory will be used
 - the required topic types for pcl and odom are *sensor_msgs/PointCloud2* and *nav_msgs/Odometry*, respectively
@@ -77,3 +77,6 @@ notes:
 ## Output
 - txt files with labels - ONE PER CLOUD
     - format: "x y z l w h fi label" line for each object 
+
+# sai_import_dataset usage - coming soon!
+[to be integrated into mcap_extract]
