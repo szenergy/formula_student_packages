@@ -4,6 +4,7 @@ import rosbag2_py
 import numpy as np
 from sensor_msgs_py import point_cloud2
 from sensor_msgs.msg import PointCloud2
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 
 from scipy.spatial.transform import Rotation as rot
@@ -45,6 +46,27 @@ def manage_dirs(dir_out: str):
             else: print("Failed to create: ", dpath)
     print("...done.")
 
+def transform_points(pcl: np.array, H: np.array) -> np.array:
+    """
+    Transforms a 3D point cloud with intensity values using a homogeneous transformation matrix.
+
+    Parameters:
+        pcl (np.ndarray): An Nx4 array representing the 3D point cloud (x, y, z, intensity).
+        H (np.ndarray): A 4x4 homogeneous transformation matrix.
+
+    Returns:
+        np.ndarray: The transformed 3D point cloud with intensity values preserved.
+    """
+    intensity = pcl[:, 3].reshape(-1,1)
+    pcl = pcl[:, :3]
+    pcl = np.hstack((pcl, np.ones((pcl.shape[0],1))))
+
+    tranformed_pcl = pcl @ H.T
+    tranformed_pcl = tranformed_pcl[:,:3]
+    tranformed_pcl = np.hstack((tranformed_pcl, intensity))
+
+    return tranformed_pcl
+
 def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
     if not len(stamps): return -1
     cid = 0
@@ -81,7 +103,7 @@ def init_reader(input_bag: str, pcl_topic: str, odom_topic: str):
             if pcl_count: break
     return reader, pcl_count, odom_count, reader.get_metadata().message_count
 
-def read_messages(reader):
+def read_messages(reader, pcl_topic, odom_topic):
     topic_types = reader.get_all_topics_and_types()
     def typename(topic_name):
         for topic_type in topic_types:
@@ -90,9 +112,10 @@ def read_messages(reader):
         raise ValueError(f"topic {topic_name} not in bag")
     while reader.has_next():
         topic, data, timestamp = reader.read_next()
-        msg_type = get_message(typename(topic))
-        msg = deserialize_message(data, msg_type)
-        yield topic, msg, timestamp
+        if topic in [pcl_topic, odom_topic]:
+            msg_type = get_message(typename(topic))
+            msg = deserialize_message(data, msg_type)
+            yield topic, msg, timestamp
     del reader
 
 def main():
@@ -155,19 +178,25 @@ def main():
         pcl_timestamps = []
         odom_data = []
         cnt = 1
-        for topic, msg, timestamp in read_messages(reader):
+        for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
             if isinstance(msg, PointCloud2):
                 pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
                 pointcloud_np = np.stack([pointcloud_np_structured['x'],
                             pointcloud_np_structured['y'],
                             pointcloud_np_structured['z'],
                             pointcloud_np_structured['intensity']], axis=-1)
+                # TODO: make this more generic once measurement vehicle is fixed
+                H = np.eye(4, dtype=np.float32)
+                H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
+                H[:3, 3] = [0.466, 0.0, 0.849]
+                # transform pcl from sensor coord sys to vehicle coord sys
+                tf_pointcloud_np = transform_points(pointcloud_np, H).astype(np.float32)
                 fname = f"{len(pcl_timestamps):07d}"
                 bin_files.append(fname)
                 pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
                 fname = f"{dir_out}/points/{fname}"
                 with open(fname, 'wb') as f:
-                    b = pointcloud_np.tobytes() # todo: compare with inline performance
+                    b = tf_pointcloud_np.tobytes() # todo: compare with inline performance
                     f.write(b)
             elif isinstance(msg, Odometry):
                 o = msg.pose.pose.orientation
@@ -182,6 +211,20 @@ def main():
                     "vx": msg.twist.twist.linear.x,
                     "vy": msg.twist.twist.linear.y,
                     "yawrate": msg.twist.twist.angular.z
+                })
+            elif isinstance(msg, PoseStamped):
+                o = msg.pose.orientation
+                x, y, z, w = o.x, o.y, o.z, o.w
+                yaw = rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
+                odom_data.append({
+                    "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                    "x": msg.pose.position.x,
+                    "y": msg.pose.position.y,
+                    "z": msg.pose.position.z,
+                    "yaw": yaw,
+                    "vx": 0.0,
+                    "vy": 0.0,
+                    "yawrate": 0.0
                 })
             sys.stdout.write(f"\rMessages processed:\t- total: {cnt :{m_l}d} / {msg_count :{m_l}d}"
                              f"\t(pcl: {len(pcl_timestamps) :{p_l}d} / {pcl_count :{p_l}d},"

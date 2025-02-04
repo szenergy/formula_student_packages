@@ -3,6 +3,7 @@ import argparse
 import os
 import sys
 import json
+from scipy.spatial.transform import Rotation as rot
 
 print("Welcome!")
 try:
@@ -21,7 +22,7 @@ except BaseException as be:
     exit()
 
 def dump_urls(pcl_urls):
-    dumpfile = f"{os.get_cwd()}/emergency_asset_url_dump.txt"
+    dumpfile = f"{os.getcwd()}/emergency_asset_url_dump.txt"
     try:
         with open(dumpfile, "a") as f:
             f.write("I am so sorry about this... Here are the raw URLs:\n")
@@ -32,12 +33,19 @@ def dump_urls(pcl_urls):
         print(f"Oh no... not the emergency dump!!! (error = {e})")
 
 def get_heading(dict: dict):
-
+    # TODO: use this once precise odometry is available
+    # quat = rot.from_euler("xyz", [0.0, 0.0, dict]).as_quat()
+    # return {
+    #     "qx": quat[0],
+    #     "qy": quat[1],
+    #     "qz": quat[2],
+    #     "qw": quat[3],
+    # }
     return {
-        "qx": 0,
-        "qy": 0,
-        "qz": 0,
-        "qw": 1,
+        "qx": 0.0,
+        "qy": 0.0,
+        "qz": 0.0,
+        "qw": 1.0,
     }
 
 parser = argparse.ArgumentParser(description=__doc__)
