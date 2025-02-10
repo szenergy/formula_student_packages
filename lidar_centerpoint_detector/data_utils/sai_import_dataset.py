@@ -1,4 +1,4 @@
-#todo: merge with mcap extractor
+#TODO: merge with mcap extractor
 import argparse
 import os
 import sys
@@ -88,7 +88,7 @@ sl_f = len(str(l_f)) # string length (number of output decimals)
 dl_f = sl_f - 2 # progress percent decimal precision (str length)
 c_f = 0 # count of uploaded files (progress)
 
-if False: # not urls_from_file # todo: add --urls_from_file param
+if True: # not urls_from_file # TODO: add --urls_from_file param
     print("Uploading assets...")
     for file in files:
         sys.stdout.write(f"\rFiles uploaded: {c_f:{sl_f}d} / {l_f:{sl_f}d} [{100*c_f/l_f:2.{dl_f}f}%]")
@@ -127,9 +127,6 @@ if len(files) != l_d:
     print("Emergency url dump executed! (might elaborate later, idk)")
     input("Will you please press enter? I really want to exit now...")
     exit()
-
-for i in range(len(files)):
-    pcl_urls.append(i)
 
 c_d = 0
 for i in data_in['data']:
