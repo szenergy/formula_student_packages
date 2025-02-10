@@ -79,5 +79,5 @@ notes:
     - format: "x y z l w h fi label" line for each object 
 
 # sai_import_dataset usage - coming soon!
-example: **sai_import_dataset.py /someplace/your_own/directory_of_mcap_extract_output --raw-key 123your456api789key012for345segmentsAI**
+example: **sai_import_dataset.py /someplace/your_own/directory_of_mcap_extract_output --raw-key 123your456api789key012for345segmentsAI --ds_name NameOfMyDataset --sample_name NameOfMySample --ds_descr "This is my dataset. If it already exists, the description will NOT be overwritten by this."**
 [to be integrated into mcap_extract]

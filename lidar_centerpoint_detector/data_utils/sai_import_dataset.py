@@ -59,6 +59,15 @@ parser.add_argument(
     "--raw_key", action = "store_true",
     help = "by passing this argument, you can enter your api key directly - however, it is not recommended for security reasons"
 )
+parser.add_argument(
+    "--ds_name", required = False, default = '', type = str, help = "[optional] name of the dataset to be used"
+)
+parser.add_argument(
+    "--ds_descr", required = False, default = '', type = str, help = "[optional] description of the dataset to be used"
+)
+parser.add_argument(
+    "--sample_name", required = False, default = '', type = str, help = "[optional] name of the sample to be used"
+)
 
 args = parser.parse_args()
 if args.raw_key:
@@ -79,7 +88,7 @@ sl_f = len(str(l_f)) # string length (number of output decimals)
 dl_f = sl_f - 2 # progress percent decimal precision (str length)
 c_f = 0 # count of uploaded files (progress)
 
-if True: # not urls_from_file # todo: add --urls_from_file param
+if False: # not urls_from_file # todo: add --urls_from_file param
     print("Uploading assets...")
     for file in files:
         sys.stdout.write(f"\rFiles uploaded: {c_f:{sl_f}d} / {l_f:{sl_f}d} [{100*c_f/l_f:2.{dl_f}f}%]")
@@ -119,6 +128,9 @@ if len(files) != l_d:
     input("Will you please press enter? I really want to exit now...")
     exit()
 
+for i in range(len(files)):
+    pcl_urls.append(i)
+
 c_d = 0
 for i in data_in['data']:
     frames.append(
@@ -140,9 +152,18 @@ for i in data_in['data']:
     sys.stdout.flush()
 print("...done!")
 
-dataset = '--'.join(data_in['info']['source'].split('.')) # todo: param
-name = f"pcl_{dataset}_sequence" # todo: param
-ds_descr = "This is a dataset of a LiDAR pointcloud sequence."
+if args.ds_name:
+    dataset = args.ds_name
+else:
+    dataset = '--'.join(data_in['info']['source'].split('.'))
+if args.sample_name:
+    name = args.sample_name
+else:
+    name = f"pcl_{dataset}_sequence"
+if args.ds_descr:
+    ds_descr = args.ds_descr
+else:
+    ds_descr = "This is a dataset of a LiDAR pointcloud sequence."
 attributes = {"frames": frames}
 task_type = "pointcloud-cuboid-sequence"
 
@@ -150,17 +171,17 @@ dsets = []
 for i in client.get_datasets(user = client.get_user().username):
     dsets.append(i.name)
 if not dataset in dsets:
-    print("Database with given name not found, creating it...")
+    print("Dataset with given name not found, creating it...")
     try:
         client.add_dataset(dataset, ds_descr, task_type)
     except BaseException as e:
-        print("Failed to create database, it says: ", e)
+        print("Failed to create dataset, it says: ", e)
         dump_urls(pcl_urls)
         print("The URLs are safe tho. (or so i hope)")
         print("fun fact: pressing Enter makes me exit now.")
         exit()
     else:
-        print("...database created successfully! (...well, without raising an exception, i mean)")
+        print("...dataset created successfully! (...well, without raising an exception, i mean)")
 
 print("Adding sample...")
 try:
