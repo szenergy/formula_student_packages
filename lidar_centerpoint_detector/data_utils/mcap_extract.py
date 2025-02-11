@@ -24,7 +24,7 @@ ratio = [1, 1, 1]
 meta_dict = {
     "info": {
         "tool": "mcap_extract.py",
-        "version": "0.3",
+        "version": "0.3.2",
         "description": "Generated from MCAP file",
         "generated_on": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "last_updated": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -66,6 +66,62 @@ def transform_points(pcl: np.array, H: np.array) -> np.array:
     tranformed_pcl = np.hstack((tranformed_pcl, intensity))
 
     return tranformed_pcl
+
+def getyaw(o):
+    x, y, z, w = o.x, o.y, o.z, o.w
+    return rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
+
+def extract_odom(msg, is_ps, msg0 = None):
+    if is_ps:
+        if msg0 is not None and len(msg0):
+            return {
+            "timestamp": msg.header.stamp.sec - msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "x": msg.pose.position.x - msg0["x"],
+            "y": msg.pose.position.y - msg0["y"],
+            "z": msg.pose.position.z - msg0["z"],
+            "yaw": getyaw(msg.pose.orientation) - msg0["yaw"],
+            "vx": 0.0,
+            "vy": 0.0,
+            "yawrate": 0.0
+            }
+        else: 
+            odom = {
+            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "x": msg.pose.position.x,
+            "y": msg.pose.position.y,
+            "z": msg.pose.position.z,
+            "yaw": getyaw(msg.pose.orientation),
+            "vx": 0.0,
+            "vy": 0.0,
+            "yawrate": 0.0
+            }
+            if msg0 is not None: msg0 = odom # if first msg
+            return odom
+    else:
+        if msg0 is not None and len(msg0):
+            return {
+            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "x": msg.pose.pose.position.x - msg0["x"],
+            "y": msg.pose.pose.position.y - msg0["y"],
+            "z": msg.pose.pose.position.z - msg0["z"],
+            "yaw": getyaw(msg.pose.pose.orientation) - msg0["yaw"],
+            "vx": msg.twist.twist.linear.x - msg0["vx"],
+            "vy": msg.twist.twist.linear.y - msg0["vy"],
+            "yawrate": msg.twist.twist.angular.z - msg0["yawrate"]
+            }
+        else:
+            odom = {
+            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "x": msg.pose.pose.position.x,
+            "y": msg.pose.pose.position.y,
+            "z": msg.pose.pose.position.z,
+            "yaw": getyaw(msg.pose.pose.orientation),
+            "vx": msg.twist.twist.linear.x,
+            "vy": msg.twist.twist.linear.y,
+            "yawrate": msg.twist.twist.angular.z
+            }
+            if msg0 is not None: msg0 = odom # if first msg
+            return odom
 
 def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
     if not len(stamps): return -1
@@ -148,11 +204,25 @@ def main():
         "--ratio", default = [1.0, 1.0, 1.0], required = False, nargs = 3, type = float,
         help = "[optional] ratio of 'train', 'test' and 'validate' data to sort the output into"
     )
+    """
+    parser.add_argument(
+        "--frames_from", default = 0, required = False, type = int,
+        help = "[optional] ignore first N frames"
+    )
+    parser.add_argument(
+        "--frames_max", default = -1, required = False, type = int,
+        help = "[optional] stop after N frames"
+    )
+    parser.add_argument(
+        "--odom_abs", action = store_true
+        help = "[optional] use the original odometry values (without subtracting the first)"
+    )
+    """
     
     args = parser.parse_args()
     if (args.dir_out == ""):
-        dir_out = os.path.dirname(args.file_in) # todo: check existance
-    else: dir_out = args.dir_out # todo: handle directory-as-input
+        dir_out = os.path.dirname(args.file_in) # TODO: check existance
+    else: dir_out = args.dir_out # TODO: handle directory-as-input
     
     precede_with = abs(args.precede_with)
     label_every = abs(args.label_every)
@@ -165,7 +235,7 @@ def main():
             s += ratio[i]
         ratio = list(map(lambda x: x/s, ratio))
     elif (len(args.ratio)): # (if 0 < input != 3)
-        print("ERROR!") # todo: specify (+ suggest?)
+        print("ERROR!") # TODO: specify (+ suggest?)
 
     manage_dirs(dir_out)
     
@@ -180,9 +250,10 @@ def main():
         pcl_timestamps = []
         odom_data = []
         cnt = 1
-        first_odom_timestamp = -1
+        msg0 = {}
         for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
             if isinstance(msg, PointCloud2):
+                #if (args.frames_max <= cnt > args.frames_from):
                 pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
                 pointcloud_np = np.stack([pointcloud_np_structured['x'],
                             pointcloud_np_structured['y'],
@@ -201,42 +272,20 @@ def main():
                 with open(fname, 'wb') as f:
                     b = tf_pointcloud_np.tobytes() # todo: compare with inline performance
                     f.write(b)
-            elif isinstance(msg, Odometry):
-                o = msg.pose.pose.orientation
-                x, y, z, w = o.x, o.y, o.z, o.w
-                yaw = rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
-                odom_data.append({
-                    "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
-                    "x": msg.pose.pose.position.x,
-                    "y": msg.pose.pose.position.y,
-                    "z": msg.pose.pose.position.z,
-                    "yaw": yaw,
-                    "vx": msg.twist.twist.linear.x,
-                    "vy": msg.twist.twist.linear.y,
-                    "yawrate": msg.twist.twist.angular.z
-                })
-            elif isinstance(msg, PoseStamped):
-                if 0 > first_odom_timestamp:
-                    first_odom_timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-                o = msg.pose.orientation
-                x, y, z, w = o.x, o.y, o.z, o.w
-                yaw = rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
-                odom_data.append({
-                    "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - first_odom_timestamp,
-                    "x": msg.pose.position.x,
-                    "y": msg.pose.position.y,
-                    "z": msg.pose.position.z,
-                    "yaw": yaw,
-                    "vx": 0.0,
-                    "vy": 0.0,
-                    "yawrate": 0.0
-                })
+
+            # use the functions below without msg0 for absolute values (without subtracting the first one)
+            elif isinstance(msg, Odometry): odom_data.append(extract_odom(msg, False, msg0))
+            elif isinstance(msg, PoseStamped): odom_data.append(extract_odom(msg, True, msg0))
+
+            # TODO: counter correction by skipped frames
             sys.stdout.write(f"\rMessages processed:\t- total: {cnt :{m_l}d} / {msg_count :{m_l}d}"
                              f"\t(pcl: {len(pcl_timestamps) :{p_l}d} / {pcl_count :{p_l}d},"
                              f" odom: {len(odom_data) :{o_l}d} / {odom_count :{o_l}d})")
             sys.stdout.flush()
             cnt += 1
-        print("\n...mcap processing done.")
+        print(f"\n...mcap processing done.")
+        ptl = len(pcl_timestamps)
+        if (ptl < pcl_count): print(f"     ({ptl - pcl_count} pcl frames skipped)")
 
         print("Assigning timestamps (odom -> pcl) and file hashes...")
         stamps = []
@@ -295,7 +344,7 @@ def main():
                     }
                 )
         print("...metadata generated, saving...")
-        save_meta(meta_dict,dir_out)
+        save_meta(meta_dict, dir_out)
         print(f"... 'metadata.json' saved to: '{dir_out}'.")
 
         print("Rearranging files...")
@@ -365,7 +414,7 @@ def main():
                 meta_in = json.load(f)
                 for k, v in lbl_hashes.items():
                     meta_in["data"][int(k)-1]["labels"]["checksum"] = v
-            #todo: error handling
+            #TODO: error handling
             print("Rewriting data...")
             with open(f"{dir_out}/metadata.json", "w") as f:
                 json.dump(meta_in, f, indent = 4)
@@ -387,7 +436,7 @@ def main():
                   " (make sure that for every '.bin' file in the '/points/' folder"
                   "there is a '.txt' file [containing the labels] in the '/labels/' folder"
                   "and that there are no other files present!)")
-            #todo: try to resolve, check for errors, etc.
+            #TODO: try to resolve, check for errors, etc.
 
 if __name__ == "__main__":
     main()
