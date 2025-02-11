@@ -70,12 +70,14 @@ def transform_points(pcl: np.array, H: np.array) -> np.array:
 def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
     if not len(stamps): return -1
     cid = 0
-    closest = stamp - int(stamps[0]["timestamp"])
-    for i in range(1, len(stamps)):
-        current = abs(stamp - stamps[cid]["timestamp"])
-        if current < closest:
-            closest = current
-            cid = i
+    for i in range(0, len(stamps)):
+        current = stamp - stamps[i]["timestamp"]
+        if current <= 0.0:
+            if abs(current) > abs(stamp - stamps[i-1]["timestamp"]):
+                cid = i-1
+            else:
+                cid = i
+            break
     return cid
 
 def save_meta(meta_dict, dir_out):
@@ -178,6 +180,7 @@ def main():
         pcl_timestamps = []
         odom_data = []
         cnt = 1
+        first_odom_timestamp = -1
         for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
             if isinstance(msg, PointCloud2):
                 pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
@@ -213,11 +216,13 @@ def main():
                     "yawrate": msg.twist.twist.angular.z
                 })
             elif isinstance(msg, PoseStamped):
+                if 0 > first_odom_timestamp:
+                    first_odom_timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
                 o = msg.pose.orientation
                 x, y, z, w = o.x, o.y, o.z, o.w
                 yaw = rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
                 odom_data.append({
-                    "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                    "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - first_odom_timestamp,
                     "x": msg.pose.position.x,
                     "y": msg.pose.position.y,
                     "z": msg.pose.position.z,
@@ -238,6 +243,7 @@ def main():
         hashes = []
         cnt = 1
         f_l = len(str(len(bin_files)))
+        pcl_timestamps = (np.array(pcl_timestamps) - pcl_timestamps[0]).tolist()
         for i in bin_files:
             id = int(os.path.basename(i))
             stamps.append(odom_data[get_closest_stamp_id(pcl_timestamps[id], odom_data)])
