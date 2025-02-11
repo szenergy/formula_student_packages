@@ -204,7 +204,6 @@ def main():
         "--ratio", default = [1.0, 1.0, 1.0], required = False, nargs = 3, type = float,
         help = "[optional] ratio of 'train', 'test' and 'validate' data to sort the output into"
     )
-    """
     parser.add_argument(
         "--frames_from", default = 0, required = False, type = int,
         help = "[optional] ignore first N frames"
@@ -213,6 +212,7 @@ def main():
         "--frames_max", default = -1, required = False, type = int,
         help = "[optional] stop after N frames"
     )
+    """
     parser.add_argument(
         "--odom_abs", action = store_true
         help = "[optional] use the original odometry values (without subtracting the first)"
@@ -245,47 +245,54 @@ def main():
         meta_dict["info"]["user"] = gt.getuser()
         print("Processing mcap...")
         reader, pcl_count, odom_count, msg_count = init_reader(args.file_in, args.pcl_in, args.odom_in)
-        m_l, p_l, o_l = len(str(msg_count)), len(str(pcl_count)), len(str(odom_count))
+        rlv_count = pcl_count + odom_count
+        m_l, p_l, o_l, r_l = len(str(msg_count)), len(str(pcl_count)), len(str(odom_count)), len(str(rlv_count))
         bin_files = []
         pcl_timestamps = []
         odom_data = []
-        cnt = 1
+        cnt = 0
+        irlv = 0
         msg0 = {}
+        pcls = 0
+        frames_until = pcl_count
+        if args.frames_max != -1: frames_until = args.frames_max * args.label_every + args.frames_from + args.precede_with
         for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
             if isinstance(msg, PointCloud2):
-                #if (args.frames_max <= cnt > args.frames_from):
-                pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
-                pointcloud_np = np.stack([pointcloud_np_structured['x'],
-                            pointcloud_np_structured['y'],
-                            pointcloud_np_structured['z'],
-                            pointcloud_np_structured['intensity']], axis=-1)
-                # TODO: make this more generic once measurement vehicle is fixed
-                H = np.eye(4, dtype=np.float32)
-                H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
-                H[:3, 3] = [0.466, 0.0, 0.849]
-                # transform pcl from sensor coord sys to vehicle coord sys
-                tf_pointcloud_np = transform_points(pointcloud_np, H).astype(np.float32)
-                fname = f"{len(pcl_timestamps):07d}"
-                bin_files.append(fname)
-                pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
-                fname = f"{dir_out}/points/{fname}"
-                with open(fname, 'wb') as f:
-                    b = tf_pointcloud_np.tobytes() # todo: compare with inline performance
-                    f.write(b)
+                if (args.frames_from <= pcls < frames_until):
+                    pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
+                    pointcloud_np = np.stack([pointcloud_np_structured['x'],
+                                pointcloud_np_structured['y'],
+                                pointcloud_np_structured['z'],
+                                pointcloud_np_structured['intensity']], axis=-1)
+                    # TODO: make this more generic once measurement vehicle is fixed
+                    H = np.eye(4, dtype=np.float32)
+                    H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
+                    H[:3, 3] = [0.466, 0.0, 0.849]
+                    # transform pcl from sensor coord sys to vehicle coord sys
+                    tf_pointcloud_np = transform_points(pointcloud_np, H).astype(np.float32)
+                    fname = f"{len(pcl_timestamps):07d}"
+                    bin_files.append(fname)
+                    pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+                    fname = f"{dir_out}/points/{fname}"
+                    with open(fname, 'wb') as f:
+                        b = tf_pointcloud_np.tobytes() # todo: compare with inline performance
+                        f.write(b)
+                pcls += 1
 
             # use the functions below without msg0 for absolute values (without subtracting the first one)
             elif isinstance(msg, Odometry): odom_data.append(extract_odom(msg, False, msg0))
             elif isinstance(msg, PoseStamped): odom_data.append(extract_odom(msg, True, msg0))
 
-            # TODO: counter correction by skipped frames
-            sys.stdout.write(f"\rMessages processed:\t- total: {cnt :{m_l}d} / {msg_count :{m_l}d}"
-                             f"\t(pcl: {len(pcl_timestamps) :{p_l}d} / {pcl_count :{p_l}d},"
-                             f" odom: {len(odom_data) :{o_l}d} / {odom_count :{o_l}d})")
-            sys.stdout.flush()
+            else: irlv += 1
             cnt += 1
+            sys.stdout.write(f"\rMessages processed - total: [{cnt :{m_l}d} / {msg_count :{m_l}d}]"
+                             f" (relevant: [{cnt - irlv :{r_l}d} / {rlv_count :{r_l}d}] -"
+                             f" pcl: [{pcls :{p_l}d} / {pcl_count :{p_l}d}],"
+                             f" odom: [{len(odom_data) :{o_l}d} / {odom_count :{o_l}d}] )")
+            sys.stdout.flush()
         print(f"\n...mcap processing done.")
         ptl = len(pcl_timestamps)
-        if (ptl < pcl_count): print(f"     ({ptl - pcl_count} pcl frames skipped)")
+        if (ptl < pcl_count): print(f" ({pcl_count - ptl} pcl frames skipped)")
 
         print("Assigning timestamps (odom -> pcl) and file hashes...")
         stamps = []
