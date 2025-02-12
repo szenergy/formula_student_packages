@@ -100,7 +100,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
             else: # if first msg
                 msg0.update(odom) # store the absolute value to subtract later every time
                 return {
-                "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                "timestamp": 0.0,
                 "x": 0.0,
                 "y": 0.0,
                 "z": 0.0,
@@ -137,7 +137,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
             else: # if first msg
                 msg0.update(odom) # store the absolute value to subtract later every time
                 return {
-                "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                "timestamp": 0.0,
                 "x": 0.0,
                 "y": 0.0,
                 "z": 0.0,
