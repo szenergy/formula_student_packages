@@ -75,7 +75,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
     if is_ps: # "PoseStamped" data type
         if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
-            "timestamp": msg.header.stamp.sec - msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - msg0["timestamp"],
             "x": msg.pose.position.x - msg0["x"],
             "y": msg.pose.position.y - msg0["y"],
             "z": msg.pose.position.z - msg0["z"],
@@ -112,7 +112,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
     else: # "Odometry" data type
         if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
-            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - msg0["timestamp"],
             "x": msg.pose.pose.position.x - msg0["x"],
             "y": msg.pose.pose.position.y - msg0["y"],
             "z": msg.pose.pose.position.z - msg0["z"],
