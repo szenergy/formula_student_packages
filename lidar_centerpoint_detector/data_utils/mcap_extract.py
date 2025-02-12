@@ -71,9 +71,9 @@ def getyaw(o):
     x, y, z, w = o.x, o.y, o.z, o.w
     return rot.from_quat([x, y, z, w]).as_euler("xyz")[2]
 
-def extract_odom(msg, is_ps, msg0 = None):
-    if is_ps:
-        if msg0 is not None and len(msg0):
+def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return absolute odom, with: subtract first odom (store if non-existent)
+    if is_ps: # "PoseStamped" data type
+        if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
             "timestamp": msg.header.stamp.sec - msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
             "x": msg.pose.position.x - msg0["x"],
@@ -84,7 +84,7 @@ def extract_odom(msg, is_ps, msg0 = None):
             "vy": 0.0,
             "yawrate": 0.0
             }
-        else: 
+        else: # first odom or "return absolute" mode
             odom = {
             "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
             "x": msg.pose.position.x,
@@ -95,10 +95,22 @@ def extract_odom(msg, is_ps, msg0 = None):
             "vy": 0.0,
             "yawrate": 0.0
             }
-            if msg0 is not None: msg0 = odom # if first msg
-            return odom
-    else:
-        if msg0 is not None and len(msg0):
+            if msg0 is None:
+                return odom # return as absolute value
+            else: # if first msg
+                msg0.update(odom) # store the absolute value to subtract later every time
+                return {
+                "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "yaw": 0.0,
+                "vx": 0.0,
+                "vy": 0.0,
+                "yawrate": 0.0
+                }
+    else: # "Odometry" data type
+        if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
             "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
             "x": msg.pose.pose.position.x - msg0["x"],
@@ -109,7 +121,7 @@ def extract_odom(msg, is_ps, msg0 = None):
             "vy": msg.twist.twist.linear.y - msg0["vy"],
             "yawrate": msg.twist.twist.angular.z - msg0["yawrate"]
             }
-        else:
+        else: # first odom or "return absolute" mode
             odom = {
             "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
             "x": msg.pose.pose.position.x,
@@ -120,8 +132,20 @@ def extract_odom(msg, is_ps, msg0 = None):
             "vy": msg.twist.twist.linear.y,
             "yawrate": msg.twist.twist.angular.z
             }
-            if msg0 is not None: msg0 = odom # if first msg
-            return odom
+            if msg0 is None:
+                return odom # return as absolute value
+            else: # if first msg
+                msg0.update(odom) # store the absolute value to subtract later every time
+                return {
+                "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "yaw": 0.0,
+                "vx": 0.0,
+                "vy": 0.0,
+                "yawrate": 0.0
+                }
 
 def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
     if not len(stamps): return -1
@@ -279,11 +303,11 @@ def main():
                         f.write(b)
                 pcls += 1
 
-            # use the functions below without msg0 for absolute values (without subtracting the first one)
+            # use the functions below without msg0 for absolute values (=without subtracting the first one)
             elif isinstance(msg, Odometry): odom_data.append(extract_odom(msg, False, msg0))
             elif isinstance(msg, PoseStamped): odom_data.append(extract_odom(msg, True, msg0))
 
-            else: irlv += 1
+            else: irlv += 1 # irrelevant
             cnt += 1
             sys.stdout.write(f"\rMessages processed - total: [{cnt :{m_l}d} / {msg_count :{m_l}d}]"
                              f" (relevant: [{cnt - irlv :{r_l}d} / {rlv_count :{r_l}d}] -"
