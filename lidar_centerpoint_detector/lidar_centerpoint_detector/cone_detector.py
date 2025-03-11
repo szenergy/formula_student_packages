@@ -3,6 +3,7 @@ from timeit import default_timer
 import numpy as np
 from pyquaternion import Quaternion
 from mmdet3d.apis import init_model, inference_detector
+from scipy.spatial.transform import Rotation as rot
 
 import rclpy
 from rclpy.node import Node
@@ -66,10 +67,10 @@ def remove_low_score_cone(image_anno: dict) -> dict:
     label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
     scores_ = image_anno["scores_3d"].detach().cpu().numpy()
 
-    cone_yellow = get_annotations_indices(0, 0.45, label_preds_, scores_)
-    cone_blue = get_annotations_indices(1, 0.45, label_preds_, scores_)
-    cone_orange = get_annotations_indices(2, 0.45, label_preds_, scores_)
-    cone_big = get_annotations_indices(3, 0.45, label_preds_, scores_)
+    cone_yellow = get_annotations_indices(0, 0.35, label_preds_, scores_)
+    cone_blue = get_annotations_indices(1, 0.35, label_preds_, scores_)
+    #cone_orange = get_annotations_indices(2, 0.35, label_preds_, scores_)
+    cone_big = get_annotations_indices(2, 0.1, label_preds_, scores_)
     
     for key in image_anno.keys():
         if key == 'box_type_3d':
@@ -78,7 +79,7 @@ def remove_low_score_cone(image_anno: dict) -> dict:
             image_anno[key].detach().cpu().numpy()[
                             cone_yellow +
                             cone_blue +
-                            cone_orange +
+                            #cone_orange +
                             cone_big
                             ])
 
@@ -101,7 +102,7 @@ class ConeDetectorRosNode(Node):
                 parameters=[
                     ("/cone_detector/lidar_input_topic", '/points'),
                     ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-dcn_8xb4-cyclic-20e_cone-3d.py'),
-                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_conescenes/epoch_20_pretrained.pth'),
+                    ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_conescenes/epoch_20_3pts_51_zala_cones.pth'),
                     ("/cone_detector/dataset", 'cone'), # only 'cone' or 'nus' are supported
                 ],
             )
@@ -121,6 +122,27 @@ class ConeDetectorRosNode(Node):
     def yaw2quaternion(self, yaw: float) -> Quaternion:
         return Quaternion(axis=[0,0,1], radians=yaw)
     
+    def transform_points(self, pcl: np.array, H: np.array) -> np.array:
+        """
+        Transforms a 3D point cloud with intensity values using a homogeneous transformation matrix.
+
+        Parameters:
+            pcl (np.ndarray): An Nx4 array representing the 3D point cloud (x, y, z, intensity).
+            H (np.ndarray): A 4x4 homogeneous transformation matrix.
+
+        Returns:
+            np.ndarray: The transformed 3D point cloud with intensity values preserved.
+        """
+        intensity = pcl[:, 3:].reshape(-1,pcl.shape[1]-3)
+        pcl = pcl[:, :3]
+        pcl = np.hstack((pcl, np.ones((pcl.shape[0],1))))
+
+        tranformed_pcl = pcl @ H.T
+        tranformed_pcl = tranformed_pcl[:,:3]
+        tranformed_pcl = np.hstack((tranformed_pcl, intensity))
+
+        return tranformed_pcl
+    
     def get_xyz_points(self, cloud_array: dict, remove_nans=True, dtype=float) -> np.ndarray:
         '''
         '''
@@ -138,7 +160,14 @@ class ConeDetectorRosNode(Node):
         points[...,1] = cloud_array['y']
         points[...,2] = cloud_array['z']
         points[...,3] = cloud_array['intensity']
-        return points
+
+        H = np.eye(4, dtype=np.float32)
+        H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
+        H[:3, 3] = [0.466, 0.0, 0.849]
+        # transform pcl from sensor coord sys to vehicle coord sys
+        tf_points = self.transform_points(points, H).astype(np.float32)
+
+        return tf_points
 
     def run_detector(self, input_pcl: np.array) -> np.ndarray:
         pred_results, _ = inference_detector(self.model, input_pcl)
@@ -157,8 +186,14 @@ class ConeDetectorRosNode(Node):
         t1 = default_timer()
         msg_cloud = ros2_numpy.point_cloud2.pointcloud2_to_array(msg)
         np_p = self.get_xyz_points(msg_cloud, True)
-        scores, dt_box_lidar, types = self.run_detector(np_p)
+        scores, dt_box_lidar_no_tf, types = self.run_detector(np_p)
 
+        H = np.eye(4, dtype=np.float32)
+        H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
+        H[:3, 3] = [0.466, 0.0, 0.849]
+        H = np.linalg.inv(H)
+        # transform bbox from veh coord sys to sensor coord sys
+        dt_box_lidar = self.transform_points(dt_box_lidar_no_tf, H).astype(np.float32)
         if scores.size != 0:
             for i in range(scores.size):
                 # ---------- MARKER FORMAT ----------------
@@ -183,31 +218,15 @@ class ConeDetectorRosNode(Node):
                 marker.scale.y = float(dt_box_lidar[i][3])
                 marker.scale.z = float(dt_box_lidar[i][5])
                 
-                marker.color.a = 0.7  # Alpha
-                if int(types[i]) == 9:
-                    marker.color.r = 1.0
-                    marker.color.g = 1.0
-                    marker.color.b = 1.0
-                elif int(types[i]) == 8:
+                marker.color.a = 0.85  # Alpha
+                if int(types[i]) == 1:
                     marker.color.r = 0.0
-                    marker.color.g = 1.0
-                    marker.color.b = 0.0
-                elif int(types[i]) == 7:
-                    marker.color.r = 0.0
-                    marker.color.g = 0.5
-                    marker.color.b = 1.0
-                elif int(types[i]) == 6:
-                    marker.color.r = 1.0
-                    marker.color.g = 1.0
-                    marker.color.b = 0.0
-                elif int(types[i]) == 5:
-                    marker.color.r = 1.0
                     marker.color.g = 0.0
                     marker.color.b = 1.0
-                elif int(types[i]) == 4:
-                    marker.color.r = 0.0
+                elif int(types[i]) == 0:
+                    marker.color.r = 1.0
                     marker.color.g = 1.0
-                    marker.color.b = 1.0
+                    marker.color.b = 0.0
                 elif int(types[i]) == 3:
                     marker.color.r = 1.0
                     marker.color.g = 0.0
@@ -216,14 +235,30 @@ class ConeDetectorRosNode(Node):
                     marker.color.r = 1.0
                     marker.color.g = 0.65
                     marker.color.b = 0.0
-                elif int(types[i]) == 1:
-                    marker.color.r = 0.0
-                    marker.color.g = 0.0
-                    marker.color.b = 1.0
-                elif int(types[i]) == 0:
-                    marker.color.r = 1.0
-                    marker.color.g = 1.0
-                    marker.color.b = 0.0
+                # elif int(types[i]) == 9:
+                #     marker.color.r = 1.0
+                #     marker.color.g = 1.0
+                #     marker.color.b = 1.0
+                # elif int(types[i]) == 8:
+                #     marker.color.r = 0.0
+                #     marker.color.g = 1.0
+                #     marker.color.b = 0.0
+                # elif int(types[i]) == 7:
+                #     marker.color.r = 0.0
+                #     marker.color.g = 0.5
+                #     marker.color.b = 1.0
+                # elif int(types[i]) == 6:
+                #     marker.color.r = 1.0
+                #     marker.color.g = 1.0
+                #     marker.color.b = 0.0
+                # elif int(types[i]) == 5:
+                #     marker.color.r = 1.0
+                #     marker.color.g = 0.0
+                #     marker.color.b = 1.0
+                # elif int(types[i]) == 4:
+                #     marker.color.r = 0.0
+                #     marker.color.g = 1.0
+                #     marker.color.b = 1.0
                 else:
                     marker.color.r = 1.0
                     marker.color.g = 1.0
@@ -232,7 +267,6 @@ class ConeDetectorRosNode(Node):
                 marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))  # Set lifetime to 0.2 seconds
 
                 arr_bbox.markers.append(marker)
-
         print("total callback time: ", 1/(default_timer() - t1))
         if len(arr_bbox.markers) > 0:
             self.pub_arr_bbox.publish(arr_bbox)
