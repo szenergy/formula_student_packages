@@ -231,7 +231,7 @@ def main():
         help = "[optional] output directory - if unspecified, input folder will be used"
     )
     parser.add_argument(
-        "--label_every", default = 2, required = False, type = int,
+        "--label_every", default = 1, required = False, type = int,
         help = "[optional] label only every N-th cloud (starting after the 'precede_with')"
     )
     parser.add_argument(
