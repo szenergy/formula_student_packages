@@ -1,0 +1,534 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+      Splitter Ratio: 0.5
+    Tree Height: 526
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Expanded:
+      - /2D Goal Pose1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz_common/Time
+    Experimental: false
+    Name: Time
+    SyncMode: 0
+    SyncSource: Visible Points
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Voronoi diagram
+      Namespaces:
+        voronoi_edges_0: true
+        voronoi_edges_1: true
+        voronoi_edges_10: true
+        voronoi_edges_100: true
+        voronoi_edges_101: true
+        voronoi_edges_102: true
+        voronoi_edges_103: true
+        voronoi_edges_104: true
+        voronoi_edges_105: true
+        voronoi_edges_106: true
+        voronoi_edges_107: true
+        voronoi_edges_108: true
+        voronoi_edges_109: true
+        voronoi_edges_11: true
+        voronoi_edges_110: true
+        voronoi_edges_111: true
+        voronoi_edges_112: true
+        voronoi_edges_113: true
+        voronoi_edges_114: true
+        voronoi_edges_115: true
+        voronoi_edges_116: true
+        voronoi_edges_117: true
+        voronoi_edges_118: true
+        voronoi_edges_119: true
+        voronoi_edges_12: true
+        voronoi_edges_120: true
+        voronoi_edges_121: true
+        voronoi_edges_122: true
+        voronoi_edges_123: true
+        voronoi_edges_124: true
+        voronoi_edges_125: true
+        voronoi_edges_126: true
+        voronoi_edges_127: true
+        voronoi_edges_128: true
+        voronoi_edges_129: true
+        voronoi_edges_13: true
+        voronoi_edges_130: true
+        voronoi_edges_131: true
+        voronoi_edges_132: true
+        voronoi_edges_133: true
+        voronoi_edges_134: true
+        voronoi_edges_135: true
+        voronoi_edges_136: true
+        voronoi_edges_137: true
+        voronoi_edges_138: true
+        voronoi_edges_139: true
+        voronoi_edges_14: true
+        voronoi_edges_140: true
+        voronoi_edges_141: true
+        voronoi_edges_142: true
+        voronoi_edges_143: true
+        voronoi_edges_144: true
+        voronoi_edges_145: true
+        voronoi_edges_146: true
+        voronoi_edges_147: true
+        voronoi_edges_148: true
+        voronoi_edges_149: true
+        voronoi_edges_15: true
+        voronoi_edges_150: true
+        voronoi_edges_151: true
+        voronoi_edges_152: true
+        voronoi_edges_153: true
+        voronoi_edges_154: true
+        voronoi_edges_155: true
+        voronoi_edges_156: true
+        voronoi_edges_157: true
+        voronoi_edges_158: true
+        voronoi_edges_159: true
+        voronoi_edges_16: true
+        voronoi_edges_160: true
+        voronoi_edges_161: true
+        voronoi_edges_162: true
+        voronoi_edges_163: true
+        voronoi_edges_164: true
+        voronoi_edges_165: true
+        voronoi_edges_166: true
+        voronoi_edges_167: true
+        voronoi_edges_168: true
+        voronoi_edges_169: true
+        voronoi_edges_17: true
+        voronoi_edges_170: true
+        voronoi_edges_171: true
+        voronoi_edges_172: true
+        voronoi_edges_173: true
+        voronoi_edges_174: true
+        voronoi_edges_175: true
+        voronoi_edges_176: true
+        voronoi_edges_177: true
+        voronoi_edges_178: true
+        voronoi_edges_179: true
+        voronoi_edges_18: true
+        voronoi_edges_180: true
+        voronoi_edges_181: true
+        voronoi_edges_182: true
+        voronoi_edges_183: true
+        voronoi_edges_184: true
+        voronoi_edges_185: true
+        voronoi_edges_186: true
+        voronoi_edges_187: true
+        voronoi_edges_188: true
+        voronoi_edges_189: true
+        voronoi_edges_19: true
+        voronoi_edges_190: true
+        voronoi_edges_191: true
+        voronoi_edges_192: true
+        voronoi_edges_193: true
+        voronoi_edges_194: true
+        voronoi_edges_195: true
+        voronoi_edges_196: true
+        voronoi_edges_197: true
+        voronoi_edges_198: true
+        voronoi_edges_199: true
+        voronoi_edges_2: true
+        voronoi_edges_20: true
+        voronoi_edges_200: true
+        voronoi_edges_201: true
+        voronoi_edges_202: true
+        voronoi_edges_203: true
+        voronoi_edges_204: true
+        voronoi_edges_205: true
+        voronoi_edges_206: true
+        voronoi_edges_207: true
+        voronoi_edges_208: true
+        voronoi_edges_209: true
+        voronoi_edges_21: true
+        voronoi_edges_210: true
+        voronoi_edges_211: true
+        voronoi_edges_212: true
+        voronoi_edges_213: true
+        voronoi_edges_214: true
+        voronoi_edges_215: true
+        voronoi_edges_216: true
+        voronoi_edges_217: true
+        voronoi_edges_218: true
+        voronoi_edges_219: true
+        voronoi_edges_22: true
+        voronoi_edges_220: true
+        voronoi_edges_221: true
+        voronoi_edges_222: true
+        voronoi_edges_223: true
+        voronoi_edges_224: true
+        voronoi_edges_225: true
+        voronoi_edges_226: true
+        voronoi_edges_227: true
+        voronoi_edges_228: true
+        voronoi_edges_229: true
+        voronoi_edges_23: true
+        voronoi_edges_230: true
+        voronoi_edges_231: true
+        voronoi_edges_232: true
+        voronoi_edges_233: true
+        voronoi_edges_234: true
+        voronoi_edges_235: true
+        voronoi_edges_236: true
+        voronoi_edges_237: true
+        voronoi_edges_238: true
+        voronoi_edges_239: true
+        voronoi_edges_24: true
+        voronoi_edges_240: true
+        voronoi_edges_241: true
+        voronoi_edges_242: true
+        voronoi_edges_243: true
+        voronoi_edges_244: true
+        voronoi_edges_245: true
+        voronoi_edges_246: true
+        voronoi_edges_247: true
+        voronoi_edges_248: true
+        voronoi_edges_249: true
+        voronoi_edges_25: true
+        voronoi_edges_250: true
+        voronoi_edges_251: true
+        voronoi_edges_252: true
+        voronoi_edges_253: true
+        voronoi_edges_254: true
+        voronoi_edges_255: true
+        voronoi_edges_256: true
+        voronoi_edges_257: true
+        voronoi_edges_258: true
+        voronoi_edges_259: true
+        voronoi_edges_26: true
+        voronoi_edges_260: true
+        voronoi_edges_261: true
+        voronoi_edges_262: true
+        voronoi_edges_263: true
+        voronoi_edges_264: true
+        voronoi_edges_265: true
+        voronoi_edges_266: true
+        voronoi_edges_267: true
+        voronoi_edges_268: true
+        voronoi_edges_269: true
+        voronoi_edges_27: true
+        voronoi_edges_270: true
+        voronoi_edges_271: true
+        voronoi_edges_272: true
+        voronoi_edges_273: true
+        voronoi_edges_274: true
+        voronoi_edges_275: true
+        voronoi_edges_276: true
+        voronoi_edges_277: true
+        voronoi_edges_278: true
+        voronoi_edges_279: true
+        voronoi_edges_28: true
+        voronoi_edges_280: true
+        voronoi_edges_281: true
+        voronoi_edges_282: true
+        voronoi_edges_283: true
+        voronoi_edges_29: true
+        voronoi_edges_3: true
+        voronoi_edges_30: true
+        voronoi_edges_31: true
+        voronoi_edges_32: true
+        voronoi_edges_33: true
+        voronoi_edges_34: true
+        voronoi_edges_35: true
+        voronoi_edges_36: true
+        voronoi_edges_37: true
+        voronoi_edges_38: true
+        voronoi_edges_39: true
+        voronoi_edges_4: true
+        voronoi_edges_40: true
+        voronoi_edges_41: true
+        voronoi_edges_42: true
+        voronoi_edges_43: true
+        voronoi_edges_44: true
+        voronoi_edges_45: true
+        voronoi_edges_46: true
+        voronoi_edges_47: true
+        voronoi_edges_48: true
+        voronoi_edges_49: true
+        voronoi_edges_5: true
+        voronoi_edges_50: true
+        voronoi_edges_51: true
+        voronoi_edges_52: true
+        voronoi_edges_53: true
+        voronoi_edges_54: true
+        voronoi_edges_55: true
+        voronoi_edges_56: true
+        voronoi_edges_57: true
+        voronoi_edges_58: true
+        voronoi_edges_59: true
+        voronoi_edges_6: true
+        voronoi_edges_60: true
+        voronoi_edges_61: true
+        voronoi_edges_62: true
+        voronoi_edges_63: true
+        voronoi_edges_64: true
+        voronoi_edges_65: true
+        voronoi_edges_66: true
+        voronoi_edges_67: true
+        voronoi_edges_68: true
+        voronoi_edges_69: true
+        voronoi_edges_7: true
+        voronoi_edges_70: true
+        voronoi_edges_71: true
+        voronoi_edges_72: true
+        voronoi_edges_73: true
+        voronoi_edges_74: true
+        voronoi_edges_75: true
+        voronoi_edges_76: true
+        voronoi_edges_77: true
+        voronoi_edges_78: true
+        voronoi_edges_79: true
+        voronoi_edges_8: true
+        voronoi_edges_80: true
+        voronoi_edges_81: true
+        voronoi_edges_82: true
+        voronoi_edges_83: true
+        voronoi_edges_84: true
+        voronoi_edges_85: true
+        voronoi_edges_86: true
+        voronoi_edges_87: true
+        voronoi_edges_88: true
+        voronoi_edges_89: true
+        voronoi_edges_9: true
+        voronoi_edges_90: true
+        voronoi_edges_91: true
+        voronoi_edges_92: true
+        voronoi_edges_93: true
+        voronoi_edges_94: true
+        voronoi_edges_95: true
+        voronoi_edges_96: true
+        voronoi_edges_97: true
+        voronoi_edges_98: true
+        voronoi_edges_99: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /voronoi_edges
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Visible Points
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.20000000298023224
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /visible_points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Predicted Route
+      Namespaces:
+        predicted_point_0: true
+        predicted_point_1: true
+        predicted_point_2: true
+        predicted_point_3: true
+        predicted_point_4: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /pred_points
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Search beam
+      Namespaces:
+        search_area: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /search_area
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Voronoi orig points
+      Namespaces:
+        racetrack_points_0: true
+        racetrack_points_1: true
+        racetrack_points_10: true
+        racetrack_points_11: true
+        racetrack_points_12: true
+        racetrack_points_13: true
+        racetrack_points_14: true
+        racetrack_points_15: true
+        racetrack_points_16: true
+        racetrack_points_17: true
+        racetrack_points_18: true
+        racetrack_points_19: true
+        racetrack_points_2: true
+        racetrack_points_20: true
+        racetrack_points_21: true
+        racetrack_points_22: true
+        racetrack_points_23: true
+        racetrack_points_24: true
+        racetrack_points_25: true
+        racetrack_points_26: true
+        racetrack_points_27: true
+        racetrack_points_28: true
+        racetrack_points_29: true
+        racetrack_points_3: true
+        racetrack_points_30: true
+        racetrack_points_31: true
+        racetrack_points_32: true
+        racetrack_points_33: true
+        racetrack_points_34: true
+        racetrack_points_35: true
+        racetrack_points_36: true
+        racetrack_points_37: true
+        racetrack_points_4: true
+        racetrack_points_5: true
+        racetrack_points_6: true
+        racetrack_points_7: true
+        racetrack_points_8: true
+        racetrack_points_9: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /voronoi_edges_orig
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: laser_data_frame
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+    - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.06853891909122467
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+    - Class: rviz_default_plugins/PublishPoint
+      Single click: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /clicked_point
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Angle: 0
+      Class: rviz_default_plugins/TopDownOrtho
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Scale: 13.350849151611328
+      Target Frame: <Fixed Frame>
+      Value: TopDownOrtho (rviz_default_plugins)
+      X: 0
+      Y: 0
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 817
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000297fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003b00000297000000c700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f00000297fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000003b00000297000000a000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004b00000003efc0100000002fb0000000800540069006d00650100000000000004b00000025300fffffffb0000000800540069006d006501000000000000045000000000000000000000023f0000029700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1200
+  X: 238
+  Y: 234
