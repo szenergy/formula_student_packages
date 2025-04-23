@@ -17,9 +17,18 @@ import argparse
 import json
 import hashlib
 
+
 reqdirs = ["unlabeled_pc", "points", "labels", "ImageSets"]
 datasets = ["train.txt", "val.txt", "test.txt"]
 ratio = [1, 1, 1]
+pcl_fields = {
+    'x' : 'x',
+    'y' : 'y',
+    'z' : 'z',
+    'i' : 'intensity',
+    'r' : 'reflectivity',
+    'a' : 'ambient'
+}
 
 meta_dict = {
     "info": {
@@ -46,24 +55,25 @@ def manage_dirs(dir_out: str):
             else: print("Failed to create: ", dpath)
     print("...done.")
 
-def transform_points(pcl: np.array, H: np.array) -> np.array:
+def transform_points(pcl: np.array, H: np.array, D: int) -> np.array:
     """
-    Transforms a 3D point cloud with intensity values using a homogeneous transformation matrix.
+    Transforms a 3D point cloud containing non-spatial attribute values using a homogeneous transformation matrix.
 
     Parameters:
-        pcl (np.ndarray): An Nx4 array representing the 3D point cloud (x, y, z, intensity).
+        pcl (np.ndarray): An NxD (D>=3) array representing the 3D point cloud (x, y, z, ... [e.g. intensity]).
         H (np.ndarray): A 4x4 homogeneous transformation matrix.
+        D: number of dimensions (attributes)
 
     Returns:
-        np.ndarray: The transformed 3D point cloud with intensity values preserved.
+        np.ndarray: The transformed 3D point cloud with the non-spatial values preserved.
     """
-    intensity = pcl[:, 3].reshape(-1,1)
+    non_xyz = pcl[:, 3:].reshape(-1, D-3)
     pcl = pcl[:, :3]
     pcl = np.hstack((pcl, np.ones((pcl.shape[0],1))))
 
     tranformed_pcl = pcl @ H.T
     tranformed_pcl = tranformed_pcl[:,:3]
-    tranformed_pcl = np.hstack((tranformed_pcl, intensity))
+    tranformed_pcl = np.hstack((tranformed_pcl, non_xyz))
 
     return tranformed_pcl
 
@@ -213,11 +223,15 @@ def main():
         "odom_in", type = str, help = "name of the odom topic to use"
     )
     parser.add_argument(
+        "--fields", required = False, default = 'xyzi', type = str,
+        help = "[optional] fields of the pointcloud - default = xyzi"
+    )
+    parser.add_argument(
         "--dir_out", default = "", required = False, type = str,
         help = "[optional] output directory - if unspecified, input folder will be used"
     )
     parser.add_argument(
-        "--label_every", default = 2, required = False, type = int,
+        "--label_every", default = 1, required = False, type = int,
         help = "[optional] label only every N-th cloud (starting after the 'precede_with')"
     )
     parser.add_argument(
@@ -260,6 +274,13 @@ def main():
         ratio = list(map(lambda x: x/s, ratio))
     elif (len(args.ratio)): # (if 0 < input != 3)
         print("ERROR!") # TODO: specify (+ suggest?)
+    
+    *fields_param, = args.fields
+    for i in range(len(fields_param)):
+        if not fields_param[i] in pcl_fields:
+            print(f"ERROR! Missing field '{fields_param[i]}'! AAAAAAAAAA!")
+            exit()
+        fields_param[i] = pcl_fields[fields_param[i]]
 
     manage_dirs(dir_out)
     
@@ -283,17 +304,15 @@ def main():
         for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
             if isinstance(msg, PointCloud2):
                 if (args.frames_from <= pcls < frames_until):
-                    pointcloud_np_structured = point_cloud2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
-                    pointcloud_np = np.stack([pointcloud_np_structured['x'],
-                                pointcloud_np_structured['y'],
-                                pointcloud_np_structured['z'],
-                                pointcloud_np_structured['intensity']], axis=-1)
-                    # TODO: make this more generic once measurement vehicle is fixed
+                    pointcloud_np_structured = point_cloud2.read_points(msg, field_names=tuple(fields_param), skip_nans=True)
+                    pnps = []
+                    for i in fields_param: pnps.append(pointcloud_np_structured[i])
+                    pointcloud_np = np.stack(pnps, axis=-1)
                     H = np.eye(4, dtype=np.float32)
                     H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
                     H[:3, 3] = [0.466, 0.0, 0.849]
                     # transform pcl from sensor coord sys to vehicle coord sys
-                    tf_pointcloud_np = transform_points(pointcloud_np, H).astype(np.float32)
+                    tf_pointcloud_np = transform_points(pointcloud_np, H, len(fields_param)).astype(np.float32)
                     fname = f"{len(pcl_timestamps):07d}"
                     bin_files.append(fname)
                     pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
