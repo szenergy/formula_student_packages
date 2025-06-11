@@ -1,8 +1,0 @@
-source;share/speed_control_loop/hook/cmake_prefix_path.ps1
-source;share/speed_control_loop/hook/cmake_prefix_path.dsv
-source;share/speed_control_loop/hook/cmake_prefix_path.sh
-source;share/speed_control_loop/local_setup.bash
-source;share/speed_control_loop/local_setup.dsv
-source;share/speed_control_loop/local_setup.ps1
-source;share/speed_control_loop/local_setup.sh
-source;share/speed_control_loop/local_setup.zsh
