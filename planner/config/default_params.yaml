@@ -1,0 +1,11 @@
+ft_fsd:
+  ros__parameters:
+    use_slam: false
+    use_blue_markers: true
+    blue_marker_topic: '/detected_cones'
+    use_yellow_markers: false
+    yellow_marker_topic: '/Valid_yellow'
+    path_planning:
+      max_planning_distance: 30.0
+    lookahead_distance: 5.0
+    mission_type: 'trackdrive'
