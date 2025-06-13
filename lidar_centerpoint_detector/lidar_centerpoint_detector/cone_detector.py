@@ -1,10 +1,13 @@
 from timeit import default_timer
 
+import torch
+import mmengine
 import numpy as np
 from pyquaternion import Quaternion
 from mmdet3d.apis import init_model, inference_detector
+#from mmdeploy.utils import get_input_shape, load_config # TODO: after deployment is working
 from scipy.spatial.transform import Rotation as rot
-
+#from mmdeploy.apis.utils import build_task_processor
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
@@ -103,10 +106,20 @@ class ConeDetectorRosNode(Node):
                     ("/cone_detector/lidar_input_topic", '/points'),
                     ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-dcn_8xb4-cyclic-20e_cone-3d.py'),
                     ("/cone_detector/model_checkpoints", '/home/dobayt/ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/models/ckpt_centerpoint_conescenes/epoch_20_3pts_51_zala_cones.pth'),
+                    # ("/cone_detector/model_config", '/home/dobayt/git/mmdetection3d/configs/centerpoint/centerpoint_pillar02_second_secfpn_head-circlenms_8xb4-cyclic-20e_cone-3d.py'),
+                    # ("/cone_detector/model_checkpoints", '/home/dobayt/git/mmdetection3d/work_dirs/centerpoint_pillar02_second_secfpn_head-circlenms_8xb4-cyclic-20e_cone-3d/transfer_minpts3_20e/epoch_20.pth'),
+                    # ("/cone_detector/model_deploy_config", '/home/dobayt/git/mmdeploy/configs/mmdet3d/voxel-detection/voxel-detection_tensorrt_dynamic-nus-20x5.py'),
+                    # ("/cone_detector/model_trt_file", '/home/dobayt/git/mmdeploy_model/centerpoint_cone_trt/end2end.engine'),
                     ("/cone_detector/dataset", 'cone'), # only 'cone' or 'nus' are supported
                 ],
             )
-
+        # deployed inference
+        # deploy_cfg, model_cfg = load_config(self.get_parameter("/cone_detector/model_deploy_config").value, self.get_parameter("/cone_detector/model_config").value)
+        # self.task_processor = build_task_processor(model_cfg, deploy_cfg, device='cuda:0')
+        # self.model = self.task_processor.build_backend_model(
+        # [self.get_parameter("/cone_detector/model_trt_file").value], self.task_processor.update_data_preprocessor)
+        # self.input_shape = get_input_shape(deploy_cfg)
+        # standard inference
         self.model = init_model(self.get_parameter("/cone_detector/model_config").value, self.get_parameter("/cone_detector/model_checkpoints").value, device="cuda:0")
 
         self.pcl_sub = self.create_subscription(
@@ -171,6 +184,22 @@ class ConeDetectorRosNode(Node):
 
     def run_detector(self, input_pcl: np.array) -> np.ndarray:
         pred_results, _ = inference_detector(self.model, input_pcl)
+
+        if self.get_parameter("/cone_detector/dataset").value == 'cone':
+            pred_dict_filtered = remove_low_score_cone(pred_results.to_dict()["pred_instances_3d"])
+        elif self.get_parameter("/cone_detector/dataset").value == 'nus':
+            pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
+
+        return pred_dict_filtered['scores_3d'], pred_dict_filtered['bboxes_3d'], pred_dict_filtered['labels_3d']
+    
+    def run_detector_trt(self, input_pcl: np.array) -> np.ndarray:
+        t1 = default_timer()
+        model_inputs, _ = self.task_processor.create_input(input_pcl, self.input_shape)
+        print(f"Input creation took: {default_timer() - t1}")
+        t1 = default_timer()
+        with torch.no_grad():
+            pred_results = self.model.test_step(model_inputs)[0]
+        print(f"Inference took: {default_timer() - t1}")
 
         if self.get_parameter("/cone_detector/dataset").value == 'cone':
             pred_dict_filtered = remove_low_score_cone(pred_results.to_dict()["pred_instances_3d"])
