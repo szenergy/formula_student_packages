@@ -1,3 +1,5 @@
+# <--- full script with TF-from-mcap integration --->
+
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 import rosbag2_py
@@ -16,7 +18,6 @@ import getpass as gt
 import argparse
 import json
 import hashlib
-
 
 reqdirs = ["unlabeled_pc", "points", "labels", "ImageSets"]
 datasets = ["train.txt", "val.txt", "test.txt"]
@@ -67,14 +68,15 @@ def transform_points(pcl: np.array, H: np.array, D: int) -> np.array:
     Returns:
         np.ndarray: The transformed 3D point cloud with the non-spatial values preserved.
     """
-    non_xyz = pcl[:, 3:].reshape(-1, D-3)
-    pcl = pcl[:, :3]
-    pcl = np.hstack((pcl, np.ones((pcl.shape[0],1))))
-
-    tranformed_pcl = pcl @ H.T
+    if pcl.size == 0:
+        return pcl
+    non_xyz = pcl[:, 3:].reshape(-1, D-3) if D > 3 else np.zeros((pcl.shape[0], 0), dtype=pcl.dtype)
+    pcl_xyz = pcl[:, :3]
+    pcl_h = np.hstack((pcl_xyz, np.ones((pcl_xyz.shape[0],1), dtype=pcl.dtype)))
+    tranformed_pcl = pcl_h @ H.T
     tranformed_pcl = tranformed_pcl[:,:3]
-    tranformed_pcl = np.hstack((tranformed_pcl, non_xyz))
-
+    if D > 3:
+        tranformed_pcl = np.hstack((tranformed_pcl, non_xyz))
     return tranformed_pcl
 
 def getyaw(o):
@@ -85,7 +87,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
     if is_ps: # "PoseStamped" data type
         if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
-            "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - msg0["timestamp"],
+            "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec  * 1e-9 ) - msg0["timestamp"],
             "x": msg.pose.position.x - msg0["x"],
             "y": msg.pose.position.y - msg0["y"],
             "z": msg.pose.position.z - msg0["z"],
@@ -96,7 +98,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
             }
         else: # first odom or "return absolute" mode
             odom = {
-            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 ,
             "x": msg.pose.position.x,
             "y": msg.pose.position.y,
             "z": msg.pose.position.z,
@@ -122,7 +124,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
     else: # "Odometry" data type
         if msg0 is not None and msg0: # exists and not first (initialized/not empty)
             return {
-            "timestamp": (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9) - msg0["timestamp"],
+            "timestamp": (msg.header.stamp.sec+ msg.header.stamp.nanosec * 1e-9 ) - msg0["timestamp"],
             "x": msg.pose.pose.position.x - msg0["x"],
             "y": msg.pose.pose.position.y - msg0["y"],
             "z": msg.pose.pose.position.z - msg0["z"],
@@ -133,7 +135,7 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
             }
         else: # first odom or "return absolute" mode
             odom = {
-            "timestamp": msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
+            "timestamp": msg.header.stamp.sec+ msg.header.stamp.nanosec * 1e-9,
             "x": msg.pose.pose.position.x,
             "y": msg.pose.pose.position.y,
             "z": msg.pose.pose.position.z,
@@ -157,24 +159,135 @@ def extract_odom(msg, is_ps, msg0 = None): # 3rd arg optional, without: return a
                 "yawrate": 0.0
                 }
 
-def get_closest_stamp_id(stamp: int, stamps: list): # todo: optimize
-    if not len(stamps): return -1
-    cid = 0
-    for i in range(0, len(stamps)):
-        current = stamp - stamps[i]["timestamp"]
-        if current <= 0.0:
-            if abs(current) > abs(stamp - stamps[i-1]["timestamp"]):
-                cid = i-1
-            else:
-                cid = i
+# def get_closest_stamp_id(stamp: float, stamps: list): # todo: optimize
+#     if not len(stamps): return -1
+#     cid = 0
+#     for i in range(0, len(stamps)):
+#         current = stamp - stamps[i]["timestamp"]
+#         if current <= 0.0:
+#             if i == 0:
+#                 cid = 0
+#             else:
+#                 if abs(current) > abs(stamp - stamps[i-1]["timestamp"]):
+#                     cid = i-1
+#                 else:
+#                     cid = i
+#             break
+#     else:
+#         cid = len(stamps)-1
+#     return cid
+
+def get_closest_stamp_id(stamp: int, stamps: list):
+    """
+    Find the index of the transform whose timestamp is closest to `stamp`.
+
+    Assumes `stamps` is sorted ascending by "timestamp".
+    `stamp` and `stamps[i]["timestamp"]` must be in the same time units
+    (e.g., both nanoseconds or both seconds).
+    """
+    if not stamps:
+        return -1
+
+    closest_idx = 0
+    closest_diff = abs(stamp - stamps[0]["timestamp"])
+
+    for i in range(1, len(stamps)):
+        diff = abs(stamp - stamps[i]["timestamp"])
+        if diff < closest_diff:
+            closest_diff = diff
+            closest_idx = i
+        else:
+            # Since the list is sorted, once diff starts increasing we can stop
             break
-    return cid
+
+    return closest_idx
+
+
+import math
+
+def get_interpolated_odom(stamp: float, odom_data: list, max_diff_threshold_ns=None, interpolate=True):
+    """
+    Find interpolated odometry data for a given timestamp (in nanoseconds).
+    
+    Args:
+        stamp: Target timestamp in nanoseconds
+        odom_data: List of odometry dicts [{"timestamp": ns, "x": ..., "vx": ...}]
+        max_diff_threshold_ns: Max allowed time difference in nanoseconds
+        interpolate: Whether to interpolate between readings
+    
+    Returns:
+        Interpolated odometry dict or None if no valid match
+    """
+    if not odom_data:
+        return None
+
+    # Convert to numpy for vectorized operations
+    timestamps = np.array([o["timestamp"] for o in odom_data])
+    
+    # Find insertion index (uses binary search for efficiency)
+    idx = np.searchsorted(timestamps, stamp)
+    
+    # Handle edge cases
+    if idx == 0:
+        if len(odom_data) == 1:
+            closest = odom_data[0]
+        else:
+            left = odom_data[0]
+            right = odom_data[1]
+    elif idx >= len(odom_data):
+        left = odom_data[-2] if len(odom_data) > 1 else odom_data[-1]
+        right = odom_data[-1]
+    else:
+        left = odom_data[idx-1]
+        right = odom_data[idx]
+
+    # Exact match check (with 1ms tolerance)
+    if abs(left["timestamp"] - stamp) <= 1e6:  # 1ms in ns
+        return left
+    if abs(right["timestamp"] - stamp) <= 1e6:
+        return right
+
+    if not interpolate:
+        # Return nearest neighbor
+        closest = left if abs(left["timestamp"] - stamp) < abs(right["timestamp"] - stamp) else right
+        if max_diff_threshold_ns and abs(closest["timestamp"] - stamp) > max_diff_threshold_ns:
+            return None
+        return closest
+
+    # Full interpolation
+    time_diff = right["timestamp"] - left["timestamp"]
+    if time_diff == 0:  # Prevent division by zero
+        return left
+    
+    ratio = (stamp - left["timestamp"]) / time_diff
+
+    # Linear interpolation for position and velocity
+    interp_odom = {
+        "timestamp": stamp,
+        "x": left["x"] + ratio * (right["x"] - left["x"]),
+        "y": left["y"] + ratio * (right["y"] - left["y"]),
+        "z": left["z"] + ratio * (right["z"] - left["z"]),
+        "vx": left["vx"] + ratio * (right["vx"] - left["vx"]),
+        "vy": left["vy"] + ratio * (right["vy"] - left["vy"]),
+        "yawrate": left["yawrate"] + ratio * (right["yawrate"] - left["yawrate"])
+    }
+
+    # Angular interpolation for yaw (handles wrap-around)
+    yaw_diff = ((right["yaw"] - left["yaw"] + np.pi) % (2*np.pi)) - np.pi
+    interp_odom["yaw"] = left["yaw"] + ratio * yaw_diff
+
+    if max_diff_threshold_ns:
+        max_diff = max(abs(left["timestamp"] - stamp), abs(right["timestamp"] - stamp))
+        if max_diff > max_diff_threshold_ns:
+            return None
+
+    return interp_odom
+
 
 def save_meta(meta_dict, dir_out):
     with open(f"{dir_out}/metadata.json", "w") as f:
         meta_dict["info"]["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         json.dump(meta_dict, f, indent = 4)
-    #print("...metadata file created.") #todo: check file
 
 def init_reader(input_bag: str, pcl_topic: str, odom_topic: str):
     reader = rosbag2_py.SequentialReader()
@@ -195,7 +308,8 @@ def init_reader(input_bag: str, pcl_topic: str, odom_topic: str):
             if pcl_count: break
     return reader, pcl_count, odom_count, reader.get_metadata().message_count
 
-def read_messages(reader, pcl_topic, odom_topic):
+# Modified read_messages: accept a list of topics to filter (we'll include /tf and /tf_static)
+def read_messages(reader, topics):
     topic_types = reader.get_all_topics_and_types()
     def typename(topic_name):
         for topic_type in topic_types:
@@ -204,11 +318,46 @@ def read_messages(reader, pcl_topic, odom_topic):
         raise ValueError(f"topic {topic_name} not in bag")
     while reader.has_next():
         topic, data, timestamp = reader.read_next()
-        if topic in [pcl_topic, odom_topic]:
+        if topic in topics:
             msg_type = get_message(typename(topic))
             msg = deserialize_message(data, msg_type)
             yield topic, msg, timestamp
     del reader
+
+# helper: build homogeneous matrix from a geometry_msgs.msg.Transform (transform.translation, transform.rotation)
+def transform_to_matrix(transform):
+    tx = transform.translation.x
+    ty = transform.translation.y
+    tz = transform.translation.z
+    qx = transform.rotation.x
+    qy = transform.rotation.y
+    qz = transform.rotation.z
+    qw = transform.rotation.w
+    Rm = rot.from_quat([qx, qy, qz, qw]).as_matrix()
+    H = np.eye(4, dtype=np.float64)
+    H[:3, :3] = Rm
+    H[:3, 3] = [tx, ty, tz]
+    return H
+
+def get_closest_tf_matrix(pc_time, tf_list):
+    """
+    tf_list: list of dicts {'timestamp': float, 'H': np.array}
+    returns H (4x4) closest in time, or identity if none
+    """
+    if not tf_list:
+        return np.eye(4, dtype=np.float64)
+    # build timestamps array once (tf_list is expected to be small enough)
+    ts = np.array([t['timestamp'] for t in tf_list])
+    idx = np.searchsorted(ts, pc_time)
+    if idx == 0:
+        return tf_list[0]['H']
+    if idx >= len(ts):
+        return tf_list[-1]['H']
+    # pick closer of idx-1 and idx
+    if abs(pc_time - ts[idx-1]) <= abs(pc_time - ts[idx]):
+        return tf_list[idx-1]['H']
+    else:
+        return tf_list[idx]['H']
 
 def main():
     print("Welcome to the annotation preprocessor! (MCAP to bin + folder structure + metadata.json)")
@@ -250,18 +399,20 @@ def main():
         "--frames_max", default = -1, required = False, type = int,
         help = "[optional] stop after N frames"
     )
-    """
     parser.add_argument(
-        "--odom_abs", action = store_true
-        help = "[optional] use the original odometry values (without subtracting the first)"
+        "--tf_parent", default = "map", required = False, type = str,
+        help = "[optional] parent frame to look for in TF messages (default: map)"
     )
-    """
-    
+    parser.add_argument(
+        "--tf_child", default = "base_link", required = False, type = str,
+        help = "[optional] child frame to look for in TF messages (default: base_link)"
+    )
     args = parser.parse_args()
     if (args.dir_out == ""):
-        dir_out = os.path.dirname(args.file_in) # TODO: check existance
-    else: dir_out = args.dir_out # TODO: handle directory-as-input
-    
+        dir_out = os.path.dirname(args.file_in)
+    else:
+        dir_out = args.dir_out
+
     precede_with = abs(args.precede_with)
     label_every = abs(args.label_every)
 
@@ -269,12 +420,12 @@ def main():
     if (len(args.ratio) == 3):
         s = 0
         for i in range(3):
-            ratio[i] = abs(float(args.ratio[i])) # conversion
+            ratio[i] = abs(float(args.ratio[i]))
             s += ratio[i]
         ratio = list(map(lambda x: x/s, ratio))
-    elif (len(args.ratio)): # (if 0 < input != 3)
-        print("ERROR!") # TODO: specify (+ suggest?)
-    
+    elif (len(args.ratio)):
+        print("ERROR!")
+
     *fields_param, = args.fields
     for i in range(len(fields_param)):
         if not fields_param[i] in pcl_fields:
@@ -283,12 +434,13 @@ def main():
         fields_param[i] = pcl_fields[fields_param[i]]
 
     manage_dirs(dir_out)
-    
+
     if not os.path.isfile(f"{dir_out}/metadata.json"):
         print("Metadata file does not exist, generating data from mcap...")
-        meta_dict["info"]["source"] = os.path.basename(args.file_in) # should use ntpath ! (or check if so...)
+        meta_dict["info"]["source"] = os.path.basename(args.file_in)
         meta_dict["info"]["user"] = gt.getuser()
         print("Processing mcap...")
+
         reader, pcl_count, odom_count, msg_count = init_reader(args.file_in, args.pcl_in, args.odom_in)
         rlv_count = pcl_count + odom_count
         m_l, p_l, o_l, r_l = len(str(msg_count)), len(str(pcl_count)), len(str(odom_count)), len(str(rlv_count))
@@ -300,33 +452,232 @@ def main():
         msg0 = {}
         pcls = 0
         frames_until = pcl_count
-        if args.frames_max != -1: frames_until = args.frames_max * args.label_every + args.frames_from + args.precede_with
-        for topic, msg, timestamp in read_messages(reader, args.pcl_in, args.odom_in):
-            if isinstance(msg, PointCloud2):
+        if args.frames_max != -1:
+            frames_until = args.frames_max * args.label_every + args.frames_from + args.precede_with
+
+        # We'll gather TFs for map->base_link here
+        tf_list = []  # list of {'timestamp': float, 'H': 4x4 np.array}
+        tf_topics = ["/tf", "/tf_static", "tf", "tf_static"]  # some bags use no leading slash
+
+        # read messages (include pointcloud, odom, and tf topics)
+        topics_to_read = [args.pcl_in, args.odom_in] + tf_topics
+        for topic, msg, timestamp in read_messages(reader, topics_to_read):
+            # ----------------------------------------------------------------
+            # Collect TF messages first (offline). TF message type: tf2_msgs/TFMessage (field 'transforms')
+            if topic in tf_topics:
+                # msg.transforms is a list of TransformStamped
+                try:
+                    for t in msg.transforms:
+                        # header.frame_id is parent, child_frame_id is child
+                        parent = t.header.frame_id
+                        child = t.child_frame_id
+                        if parent == args.tf_parent and child == args.tf_child:
+                            # timestamp may be in t.header.stamp
+                            try:
+                                ts = t.header.stamp.sec+ t.header.stamp.nanosec * 1e-9 
+                            except Exception:
+                                ts = 0.0
+                            H = transform_to_matrix(t.transform)
+                            tf_list.append({'timestamp': ts, 'H': H})
+                except Exception:
+                    # older or different TF message structure: try alternative access
+                    pass
+                # continue reading; TF messages themselves are not written as point clouds
+            # ----------------------------------------------------------------
+            elif isinstance(msg, PointCloud2):
                 if (args.frames_from <= pcls < frames_until):
+                    # get closest TF for this pointcloud's timestamp
+                    pc_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9 
+                    # sort tf list if not sorted yet (do it lazily once list is non-empty)
+                    if tf_list:
+                        # ensure sorted by timestamp
+                        tf_list = sorted(tf_list, key=lambda x: x['timestamp'])
+                        H_dynamic = get_closest_tf_matrix(pc_time, tf_list)
+                    else:
+                        H_dynamic = np.eye(4, dtype=np.float64)  # fallback
+
+                    # read pointcloud fields to numpy
                     pointcloud_np_structured = point_cloud2.read_points(msg, field_names=tuple(fields_param), skip_nans=True)
                     pnps = []
-                    for i in fields_param: pnps.append(pointcloud_np_structured[i])
+                    for f in fields_param:
+                        pnps.append(pointcloud_np_structured[f])
                     pointcloud_np = np.stack(pnps, axis=-1)
-                    H = np.eye(4, dtype=np.float32)
-                    H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
-                    H[:3, 3] = [0.466, 0.0, 0.849]
-                    # transform pcl from sensor coord sys to vehicle coord sys
-                    tf_pointcloud_np = transform_points(pointcloud_np, H, len(fields_param)).astype(np.float32)
+
+                    # sensor->base transform (your existing fixed transform)
+                    H_sensor_base = np.eye(4, dtype=np.float32)
+                    H_sensor_base[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi], degrees = True).as_matrix()
+                    H_sensor_base[:3, 3] = [0.466, 0.0, 0.849]
+
+                    # # compose: map <- base <- sensor  => map <- sensor: H_map_sensor = H_dynamic @ H_sensor_base
+                    # H_combined = (H_dynamic.astype(np.float32) @ H_sensor_base.astype(np.float32)).astype(np.float32)
+
+                    # transform pcl from sensor coord sys to map coord sys
+                    tf_pointcloud_np = transform_points(pointcloud_np, H_sensor_base, len(fields_param)).astype(np.float32)
+
                     fname = f"{len(pcl_timestamps):07d}"
                     bin_files.append(fname)
-                    pcl_timestamps.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9)
+                    pcl_timestamps.append(pc_time)
                     fname = f"{dir_out}/points/{fname}"
                     with open(fname, 'wb') as f:
-                        b = tf_pointcloud_np.tobytes() # todo: compare with inline performance
+                        b = tf_pointcloud_np.tobytes()
                         f.write(b)
                 pcls += 1
 
-            # use the functions below without msg0 for absolute values (=without subtracting the first one)
-            elif isinstance(msg, Odometry): odom_data.append(extract_odom(msg, False, msg0))
-            elif isinstance(msg, PoseStamped): odom_data.append(extract_odom(msg, True, msg0))
+        #     elif isinstance(msg, Odometry) or isinstance(msg, PoseStamped):
+        #         # Get the odometry message timestamp
+        #         odom_time = msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec
+    
+        #         # Get the closest map-to-base_link transform for this odometry message
+        #         if tf_list:
+        #             tf_list = sorted(tf_list, key=lambda x: x['timestamp'])
+        #             H_dynamic = get_closest_tf_matrix(odom_time, tf_list)
+        #         else:
+        #             H_dynamic = np.eye(4, dtype=np.float64)
+    
+        #         # Extract the original odometry data
+        #         odom = extract_odom(msg, isinstance(msg, PoseStamped), msg0)
+    
+        #         # Transform the odometry pose to map frame
+        #         if isinstance(msg, Odometry):
+        #             # For Odometry messages, transform both pose and twist if needed
+        #             pose_matrix = np.eye(4)
+        #             pose_matrix[:3, 3] = [odom['x'], odom['y'], odom['z']]
+        #             pose_matrix[:3, :3] = rot.from_euler('z', odom['yaw']).as_matrix()
+        
+        #             # Apply map transformation
+        #             transformed_pose = H_dynamic @ pose_matrix
+        
+        #             # Update odometry data
+        #             odom['x'], odom['y'], odom['z'] = transformed_pose[:3, 3]
+        #             odom['yaw'] = rot.from_matrix(transformed_pose[:3, :3]).as_euler('xyz')[2]
+        
+        # # Note: Velocity/twist data would need to be transformed too if needed
+        # # For simplicity, we'll leave it in the body frame here
+        
+        #         elif isinstance(msg, PoseStamped):
+        # # For PoseStamped, just transform the pose
+        #             pose_matrix = np.eye(4)
+        #             pose_matrix[:3, 3] = [odom['x'], odom['y'], odom['z']]
+        #             pose_matrix[:3, :3] = rot.from_euler('z', odom['yaw']).as_matrix()
+        
+        # # Apply map transformation
+        #             transformed_pose = H_dynamic @ pose_matrix
+        
+        # # Update odometry data
+        #             odom['x'], odom['y'], odom['z'] = transformed_pose[:3, 3]
+        #             odom['yaw'] = rot.from_matrix(transformed_pose[:3, :3]).as_euler('xyz')[2]
+    
+        #         odom_data.append(odom)
 
-            else: irlv += 1 # irrelevant
+
+            # elif isinstance(msg, (Odometry, PoseStamped)):
+            #     # Get current map->base_link transform
+            #     odom_time = msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec
+            #     H_map_base = get_closest_tf_matrix(odom_time, tf_list) if tf_list else np.eye(4)
+                
+            #     # Convert map-frame odom to base_link frame
+            #     if isinstance(msg, Odometry):
+            #         # Pose in map frame
+            #         pose_map = np.eye(4)
+            #         pose_map[:3, 3] = [msg.pose.pose.position.x, 
+            #                         msg.pose.pose.position.y, 
+            #                         msg.pose.pose.position.z]
+            #         pose_map[:3, :3] = rot.from_quat([
+            #             msg.pose.pose.orientation.x,
+            #             msg.pose.pose.orientation.y,
+            #             msg.pose.pose.orientation.z,
+            #             msg.pose.pose.orientation.w
+            #         ]).as_matrix()
+                    
+            #         # Convert to base_link frame: T_base_map = T_base_map = inv(T_map_base)
+            #         pose_base = np.linalg.inv(H_map_base) @ pose_map
+                    
+            #         # Extract components
+            #         odom = {
+            #             'timestamp': odom_time,
+            #             'x': pose_base[0, 3],
+            #             'y': pose_base[1, 3],
+            #             'z': pose_base[2, 3],
+            #             'yaw': rot.from_matrix(pose_base[:3, :3]).as_euler('zyx')[0],
+            #             'vx': msg.twist.twist.linear.x,
+            #             'vy': msg.twist.twist.linear.y,
+            #             'yawrate': msg.twist.twist.angular.z
+            #         }
+
+            #         odom_data.append(odom)
+
+            elif isinstance(msg, PoseStamped):
+                # Get current map->base_link transform
+                odom_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+                H_map_base = get_closest_tf_matrix(odom_time, tf_list) if tf_list else np.eye(4)
+                    
+                # Pose in map frame
+                pose_map = np.eye(4)
+                pose_map[:3, 3] = [msg.pose.position.x, 
+                                    msg.pose.position.y, 
+                                    msg.pose.position.z]
+                pose_map[:3, :3] = rot.from_quat([
+                        msg.pose.orientation.x,
+                        msg.pose.orientation.y,
+                        msg.pose.orientation.z,
+                        msg.pose.orientation.w
+                    ]).as_matrix()
+                    
+                    # Convert to base_link frame: T_base_map = inv(T_map_base)
+                pose_base = np.linalg.inv(H_map_base) @ pose_map
+                    
+                    # Extract components (PoseStamped has no velocity data)
+                odom = {
+                        'timestamp': odom_time,
+                        'x': pose_base[0, 3],
+                        'y': pose_base[1, 3],
+                        'z': pose_base[2, 3],
+                        'yaw': rot.from_matrix(pose_base[:3, :3]).as_euler('zyx')[0],
+                        'vx': 0.0,  # PoseStamped doesn't contain velocity
+                        'vy': 0.0,
+                        'yawrate': 0.0
+                    }
+
+                odom_data.append(odom)
+
+
+            # elif isinstance(msg, (Odometry, PoseStamped)):
+            #     odom_time = msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec
+                
+            #     # Get map->base_link transform
+            #     H_map_base = get_closest_tf_matrix(odom_time, tf_list) if tf_list else np.eye(4)
+                
+            #     # Extract original odom (in map frame)
+            #     odom_map_frame = extract_odom(msg, isinstance(msg, PoseStamped))
+                
+            #     # Convert to base_link frame
+            #     pose_map = np.eye(4)
+            #     pose_map[:3, 3] = [odom_map_frame['x'], odom_map_frame['y'], odom_map_frame['z']]
+            #     pose_map[:3, :3] = rot.from_euler('z', odom_map_frame['yaw']).as_matrix()
+                
+            #     pose_base = np.linalg.inv(H_map_base) @ pose_map
+                
+            #     # Create final odom entry
+            #     odom = {
+            #         'timestamp': odom_time,
+            #         'x': pose_base[0, 3],
+            #         'y': pose_base[1, 3],
+            #         'z': pose_base[2, 3],
+            #         'yaw': rot.from_matrix(pose_base[:3, :3]).as_euler('zyx')[0],
+            #         'vx': odom_map_frame.get('vx', 0.0),
+            #         'vy': odom_map_frame.get('vy', 0.0),
+            #         'yawrate': odom_map_frame.get('yawrate', 0.0)
+            #     }
+            #     odom_data.append(odom)
+
+            # use the functions below without msg0 for absolute values
+            elif isinstance(msg, Odometry):
+                odom_data.append(extract_odom(msg, False, msg0))
+            elif isinstance(msg, PoseStamped):
+                odom_data.append(extract_odom(msg, True, msg0))
+            else:
+                irlv += 1  # irrelevant
+
             cnt += 1
             sys.stdout.write(f"\rMessages processed - total: [{cnt :{m_l}d} / {msg_count :{m_l}d}]"
                              f" (relevant: [{cnt - irlv :{r_l}d} / {rlv_count :{r_l}d}] -"
@@ -337,21 +688,55 @@ def main():
         ptl = len(pcl_timestamps)
         if (ptl < pcl_count): print(f" ({pcl_count - ptl} pcl frames skipped)")
 
+        # ... the rest of your pipeline is unchanged: timestamps -> odom association, metadata, renaming, etc.
         print("Assigning timestamps (odom -> pcl) and file hashes...")
         stamps = []
         hashes = []
         cnt = 1
         f_l = len(str(len(bin_files)))
+        # normalize pcl_timestamps to start from zero (as your code did)
         pcl_timestamps = (np.array(pcl_timestamps) - pcl_timestamps[0]).tolist()
         for i in bin_files:
             id = int(os.path.basename(i))
             stamps.append(odom_data[get_closest_stamp_id(pcl_timestamps[id], odom_data)])
-            with open(f"{dir_out}/points/{i}", "rb") as f: # ...extract hash
+            with open(f"{dir_out}/points/{i}", "rb") as f:
                 b = f.read()
                 hashes.append(hashlib.md5(b).hexdigest())
             sys.stdout.write(f"\rFiles processed: {cnt :{f_l}d} / {len(bin_files) :{f_l}d}")
             sys.stdout.flush()
             cnt += 1
+
+        # for i in bin_files:
+        #     id = int(os.path.basename(i))
+        #     pcl_time = pcl_timestamps[id]  # Ensure this is in seconds (same units as odom_data)
+    
+        #     # Get synchronized odometry (with interpolation)
+        #     odom = get_interpolated_odom(
+        #         stamp=pcl_time,
+        #         odom_data=odom_data,
+        #         max_diff_threshold_ns=0.1,  # 100ms tolerance
+        #         interpolate=True         # Enable for smoother motion
+        #     )
+    
+        #     if odom is None:
+        #         print(f"Warning: No odometry within 100ms for point cloud {i} (t={pcl_time:.3f}s)")
+        #         continue
+    
+        #     stamps.append(odom)  # Store synchronized odometry
+    
+        #     # Process point cloud file
+        #     with open(f"{dir_out}/points/{i}", "rb") as f:
+        #         b = f.read()
+        #         hashes.append(hashlib.md5(b).hexdigest())
+    
+        #     # Progress reporting
+        #     cnt += 1
+        #     sys.stdout.write(f"\rFiles processed: {cnt:{f_l}d}/{len(bin_files):{f_l}d}")
+        #     sys.stdout.flush()
+
+        print("\nOdometry-point cloud synchronization complete.")
+        print(f"Success rate: {len(stamps)}/{len(bin_files)} ({100*len(stamps)/len(bin_files):.1f}%)")
+
         print("\n...data assigned.")
         print("Generating layout links...")
         label_files = []
@@ -370,7 +755,7 @@ def main():
             label_files.append(f"{dir_out}/points/{i :07d}")
         print("Generating metadata...")
         for id in range(1, len(label_files)+1):
-            oid = (id - 1) * label_every + precede_with # original id (of the unsorted files)
+            oid = (id - 1) * label_every + precede_with
             meta_dict["data"].append({
                 "id": id,
                 "odom": stamps[oid],
@@ -398,12 +783,12 @@ def main():
         print(f"... 'metadata.json' saved to: '{dir_out}'.")
 
         print("Rearranging files...")
-        print("...duplicating 'unlabeled'...") #todo: if duplication is not needed  (-?)
-        tot, ctot, c = 0, 1, 1 # total, and counters
+        print("...duplicating 'unlabeled'...")
+        tot, ctot, c = 0, 1, 1
         kl = len(link_fwd.keys())
         for i in link_fwd.keys():
             tot += len(link_fwd[i])
-        c_l, tot_l = len(str(kl)), len(str(tot)) # format length
+        c_l, tot_l = len(str(kl)), len(str(tot))
 
         for i in link_fwd.keys():
             l = len(link_fwd[i])
@@ -418,7 +803,7 @@ def main():
                 p += 1
                 ctot += 1
             c += 1
-        
+
         print("\n...renaming files...")
         id = 1
         tot = len(label_files)
@@ -459,17 +844,16 @@ def main():
                     with open(f"{dir_out}/labels/{i}", "rb") as f:
                         b = f.read()
                         lbl_hashes[id] = hashlib.md5(b).hexdigest()
-            
+
             with open(f"{dir_out}/metadata.json", "r") as f:
                 meta_in = json.load(f)
                 for k, v in lbl_hashes.items():
                     meta_in["data"][int(k)-1]["labels"]["checksum"] = v
-            #TODO: error handling
             print("Rewriting data...")
             with open(f"{dir_out}/metadata.json", "w") as f:
                 json.dump(meta_in, f, indent = 4)
             print("...data saved.")
-            
+
             print("Writing IDs to the corresponding files by the given dataset ratio...")
             for i in range(len(datasets)):
                 with open(f"{dir_out}/ImageSets/{datasets[i]}", "w") as f:
@@ -477,16 +861,14 @@ def main():
                         f.write( txt_files[int(j)][:-4] + '\n')
                     print(f"- file '{dir_out}/ImageSets/{datasets[i]}' created.")
             print("...files created, IDs allocated.")
-                
+
             print("All done.")
             print("The data is ready for use.")
-            
         else:
             print("The files in the /labels/ folder do not match their binary counterparts!"
                   " (make sure that for every '.bin' file in the '/points/' folder"
                   "there is a '.txt' file [containing the labels] in the '/labels/' folder"
                   "and that there are no other files present!)")
-            #TODO: try to resolve, check for errors, etc.
 
 if __name__ == "__main__":
     main()

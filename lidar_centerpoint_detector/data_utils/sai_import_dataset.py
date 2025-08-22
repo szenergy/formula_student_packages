@@ -34,19 +34,19 @@ def dump_urls(pcl_urls):
 
 def get_heading(dict: dict):
     # TODO: use this once precise odometry is available
-    # quat = rot.from_euler("xyz", [0.0, 0.0, dict]).as_quat()
-    # return {
-    #     "qx": quat[0],
-    #     "qy": quat[1],
-    #     "qz": quat[2],
-    #     "qw": quat[3],
-    # }
+    quat = rot.from_euler("xyz", [0.0, 0.0, dict]).as_quat()
     return {
-        "qx": 0.0,
-        "qy": 0.0,
-        "qz": 0.0,
-        "qw": 1.0,
+        "qx": quat[0],
+        "qy": quat[1],
+        "qz": quat[2],
+        "qw": quat[3],
     }
+    # return {
+    #     "qx": 0.0,
+    #     "qy": 0.0,
+    #     "qz": 0.0,
+    #     "qw": 1.0,
+    # }
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument(
@@ -149,6 +149,25 @@ for i in data_in['data']:
     sys.stdout.flush()
 print("...done!")
 
+# for i in data_in['data']:
+#     frames.append({
+#         "pcd": {"url": pcl_urls[i['id']-1], "type": "binary-xyzi"},
+#         "name": f"pcl_{i['id']}",
+#         "timestamp": i['odom']['timestamp'],
+#         "ego_pose": {
+#             "position": {
+#                 "x": 0.0,  # base_link is origin
+#                 "y": 0.0,
+#                 "z": 0.0
+#             },
+#             "heading": get_heading(0.0)  # No rotation
+#         },
+#     })
+#     c_d += 1
+#     sys.stdout.write(f"\rpcl metadata processed: {c_d:{sl_d}d} / {l_d:{sl_d}d} [{100*c_d/l_d:2.{dl_d}f}%]")
+#     sys.stdout.flush()
+# print("...done!")
+
 if args.ds_name:
     dataset = args.ds_name
 else:
@@ -162,7 +181,7 @@ if args.ds_descr:
 else:
     ds_descr = "This is a dataset of a LiDAR pointcloud sequence."
 attributes = {"frames": frames}
-task_type = "pointcloud-cuboid-sequence"
+task_type = "pointcloud-vector-sequence"
 
 dsets = []
 for i in client.get_datasets(user = client.get_user().username):
