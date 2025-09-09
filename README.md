@@ -43,7 +43,7 @@ flowchart TD
 # Clone and build
 
 [![Static Badge](https://img.shields.io/badge/ROS_2-Humble-34aec5)](https://docs.ros.org/en/humble/)
-
+#### *Note: There is a dockerfile included in order to launch the whole system containerized. ( instructions below + more details at* **/docker_x86_64/README.md** *)*
 ## Clone
 
 ``` bash
@@ -54,7 +54,7 @@ cd ~/ros2_ws/src
 git clone https://github.com/szenergy/formula_student_packages
 ```
 
-## Build
+## Build <sub><sup>*(non-Docker)*</sup></sub>
 
 ``` bash
 sudo apt install ros-humble-pcl-ros
@@ -67,8 +67,16 @@ cd ~/ros2_ws
 ``` bash
 colcon build --symlink-install --packages-select formula_student_bringup cone_detection_lidar cone_detection_camera lidar_pre_filter
 ```
+## Docker build
 
-## Run
+*( from the same directory as the dockerfile - /docker_x86_64/ in this repo - or: replace . with your path )*
+```
+docker build -t formula_student_stack_image .
+```
+
+<small><sub>*( more at: **/docker_x86_64/README.md** )*</sub></small>
+
+## Run <sub><sup>*(non-Docker)*</sup></sub>
  
 ``` bash
 source ~/ros2_ws/install/setup.bash 
@@ -80,6 +88,17 @@ ros2 launch formula_student_bringup tf_static.launch.py
 ``` bash
 ros2 launch cone_detection_lidar detection_simple.launch.py
 ```
+
+## Docker run
+
+**Native Linux** run command:  
+- *not tested yet, try command below*
+
+**WSL (Windows)** run command: 
+```
+docker run -it --rm --net=host -e DISPLAY=host.docker.internal:0 -e LIBGL_ALWAYS_INDIRECT=0 -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" -v /tmp/.X11-unix:/tmp/.X11-unix --privileged --gpus all --name formula_student_stack formula_student_stack_image
+```
+<small><sub>*( more at: **/docker_x86_64/README.md** )*</sub></small>
 
 ## Directory structure
 
