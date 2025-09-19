@@ -43,7 +43,9 @@ flowchart TD
 # Clone and build
 
 [![Static Badge](https://img.shields.io/badge/ROS_2-Humble-34aec5)](https://docs.ros.org/en/humble/)
-#### *Note: There is a dockerfile included in order to launch the whole system containerized. ( instructions below + more details at* **/docker_x86_64/README.md** *)*
+> [!NOTE]
+> <big>*There is a dockerfile included in order to launch the whole system containerized. ( instructions below + more details in corresponding subdirectory:* **/docker/README.md** *)*</big>
+
 ## Clone
 
 ``` bash
@@ -69,12 +71,14 @@ colcon build --symlink-install --packages-select formula_student_bringup cone_de
 ```
 ## Docker build
 
-*( from the same directory as the dockerfile - /docker_x86_64/ in this repo - or: replace . with your path )*
+> <small>*( from the same directory as the dockerfile, assuming Git is installed )*</small>
+
+```
+git clone https://github.com/jkk-research/mmdetection3d/
+```
 ```
 docker build -t formula_student_stack_image .
 ```
-
-<small><sub>*( more at: **/docker_x86_64/README.md** )*</sub></small>
 
 ## Run <sub><sup>*(non-Docker)*</sup></sub>
  
@@ -92,13 +96,15 @@ ros2 launch cone_detection_lidar detection_simple.launch.py
 ## Docker run
 
 **Native Linux** run command:  
-- *not tested yet, try command below*
+<small>*To be able to open a window from within the container, run this first:* `xhost +local:docker` *(host machine window access)*</small>  
+```
+docker run -it --rm --net=host -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix -v $HOME/.Xauthority:/root/.Xauthority:rw --name formula_student_stack formula_student_stack_image
+```
 
 **WSL (Windows)** run command: 
 ```
 docker run -it --rm --net=host -e DISPLAY=host.docker.internal:0 -e LIBGL_ALWAYS_INDIRECT=0 -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" -v /tmp/.X11-unix:/tmp/.X11-unix --privileged --gpus all --name formula_student_stack formula_student_stack_image
 ```
-<small><sub>*( more at: **/docker_x86_64/README.md** )*</sub></small>
 
 ## Directory structure
 
