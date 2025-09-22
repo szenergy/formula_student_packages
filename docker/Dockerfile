@@ -83,34 +83,7 @@ RUN cd /ros2_ws/src \
 # camera detection dependency
 RUN pip install cv_bridge
 
-# below are temporary fixes for some formula student packages 
-
-# [PKG_FIX] CAM_DET  >>>>>
-RUN mv  /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/class.names \
-        /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/coco.names
-
-RUN curl -L -o /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/yolov7-tiny.cfg \
-    https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov7-tiny.cfg \
- && curl -L -o /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/yolov7-tiny_last.weights \
-    https://github.com/AlexeyAB/darknet/releases/download/yolov4/yolov7-tiny.weights
-# <<<<< [PKG_FIX] CAM_DET
-
-# [PKG_FIX] GMAPPING  >>>>>
-RUN mv /ros2_ws/src/formula_student_packages/cone_detection_camera/gmapping/gmapping/gmap_crop_back_to_local.py \
- /ros2_ws/src/formula_student_packages/cone_detection_camera/gmapping/gmapping/gmapping.py
-RUN sed -i -e "s/'gmapping_node = gmapping.gmapping_node:main'/'gmapping_node = gmapping.gmapping:main'/" /ros2_ws/src/formula_student_packages/cone_detection_camera/gmapping/setup.py
-# <<<<< [PKG_FIX] GMAPPING
-
-# [PKG_FIX] PLANNER  >>>>>
-RUN cat <<'EOBASH' > /ros2_ws/src/formula_student_packages/planner/setup.cfg
-[develop]
-script_dir=$base/lib/planner
-
-[install]
-install_scripts=$base/lib/planner
-EOBASH
-# <<<<< [PKG_FIX] PLANNER
-
+# MMDetection3D default path fix
 # [PKG_FIX] MMDET  >>>>>
 RUN sed -i 's:/home/dobayt/git/mmdetection3d:/ros2_ws/src/mmdetection3d:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
  && sed -i 's:/home/dobayt/ros2_ws/src/formula_student_packages:/ros2_ws/src/formula_student_packages:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
