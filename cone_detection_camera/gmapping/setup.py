@@ -15,7 +15,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'gmapping_node = gmapping.gmapping_node:main'
+            'gmapping_node = gmapping.gmapping:main'
         ],
     },
 )

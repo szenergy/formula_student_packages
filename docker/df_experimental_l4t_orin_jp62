@@ -1,0 +1,173 @@
+# syntax=docker/dockerfile:1
+# escape=\
+
+# the most promising base image i found so far but there may be better
+FROM dustynv/l4t-ml:r36.2.0 AS fs_stack_l4t
+
+# RUNTIME ENVIRONMENT VARIABLES ARE AT THE END OF FILE! (dockerfile comment tag: #RENV)
+
+# # target platform's software specs:
+# # JetPack       R36 (rev. 4.4)
+# # CUDA Toolkit  12.6
+# # cuDNN         9.3.0.75-1
+# # NVIDIA-SMI    540.4.0
+
+
+# general setup + ROS2 ...
+
+RUN apt update \
+ && apt install software-properties-common -y \
+ && add-apt-repository universe \
+ && apt update \
+ && apt install -y curl
+
+RUN curl -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/1.1.0/ros2-apt-source_1.1.0.$(. /etc/os-release && echo $VERSION_CODENAME)_all.deb" \
+ && dpkg -i /tmp/ros2-apt-source.deb \
+ && apt update && apt upgrade -y
+
+RUN DEBIAN_FRONTEND=noninteractive apt install ros-humble-ros-base -y
+
+RUN apt install python3-rosdep -y \
+ && apt install python3-colcon-common-extensions -y \
+ && rosdep init && rosdep update
+
+WORKDIR /ros2_ws
+
+# frontend dep
+RUN apt update && apt install ros-humble-foxglove-bridge -y
+
+# important ros2 nodes
+RUN apt update && apt install git -y && mkdir -p /ros2_ws/src && cd /ros2_ws/src \
+ && git clone https://github.com/szenergy/formula_student_packages.git \
+ && git clone https://github.com/jkk-research/kalman_pos.git
+
+# python package manager
+RUN apt install -y python3-pip && python3 -m pip install --upgrade pip
+
+# # leftover?
+# RUN apt update \
+#  && apt install -y python3-pip libopenblas-dev \
+#  && pip install --upgrade requests setuptools
+
+# mmdet dep (apparently)
+RUN curl --retry 3 -OLs https://developer.download.nvidia.com/compute/cusparselt/0.7.1/local_installers/cusparselt-local-tegra-repo-ubuntu2204-0.7.1_1.0-1_arm64.deb \
+ && dpkg -i cusparselt-local-tegra-repo-ubuntu2204-0.7.1_1.0-1_arm64.deb \
+ && cp /var/cusparselt-local-tegra-repo-ubuntu2204-0.7.1/cusparselt-*-keyring.gpg /usr/share/keyrings/ \
+ && apt update \
+ && apt install -y libcusparselt0 libcusparselt-dev
+
+# experimenting with torch version (should be the right one but does not find it in the live container)
+RUN curl -OL https://developer.download.nvidia.com/compute/redist/jp/v61/pytorch/torch-2.5.0a0+872d972e41.nv24.08.17622132-cp310-cp310-linux_aarch64.whl \
+ && pip3 install --no-cache-dir torch-2.5.0a0+872d972e41.nv24.08.17622132-cp310-cp310-linux_aarch64.whl
+
+# matching version of cudnn - download and copy from outside in case of failure
+RUN curl --retry 5 --retry-delay 10 -OL https://developer.download.nvidia.com/compute/cudnn/9.13.0/local_installers/cudnn-local-tegra-repo-ubuntu2204-9.13.0_1.0-1_arm64.deb \
+ && dpkg -i cudnn-local-tegra-repo-ubuntu2204-9.13.0_1.0-1_arm64.deb \
+ && cp /var/cudnn-local-tegra-repo-ubuntu2204-9.13.0/cudnn-*-keyring.gpg /usr/share/keyrings/ \
+ && apt update && apt -y install cudnn9-cuda-12
+
+# ensuring Cuda is found during installs
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=$CUDA_HOME/bin:$PATH
+ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+# trying to satisfy multiple compatibility requirements
+RUN pip uninstall numpy scipy -y && pip install "numpy==1.26.4" "scipy<2.0"
+
+# (trust me)
+RUN pip install --upgrade pip setuptools wheel
+
+# mmdet [NOT ...3D] installer (a stubborn one when it comes to numpy version)
+RUN pip install -U openmim \
+ && mim install mmengine \
+ && pip install --upgrade setuptools \
+ && pip install numpy==1.26.4 --force-reinstall \
+ && echo -e "numpy==1.26.4" > numpy_constraint.txt \
+ && mim install mmcv==2.1.0 --constraint numpy_constraint.txt \
+ && mim install mmdet==3.3.0 --constraint numpy_constraint.txt
+
+# external dependency - source: https://github.com/jkk-research/mmdetection3d/
+COPY mmdetection3d /ros2_ws/src/mmdetection3d
+
+# ensuring proper requirement setup
+RUN cat << 'EOF' > /ros2_ws/src/mmdetection3d/pyproject.toml
+[build-system]
+requires = [
+    "setuptools>=64",
+    "wheel",
+    "torch",
+    "torchvision"
+]
+build-backend = "setuptools.build_meta"
+EOF
+
+# torch [for-/] and mmdetection3d
+RUN python3 -m pip install --upgrade pip setuptools wheel \
+ && pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu126 \
+ && cd /ros2_ws/src/mmdetection3d \
+ && pip install --use-pep517 --config-settings editable_mode=compat -e .  --ignore-installed blinker --no-cache-dir
+# blinker had to be skipped (just keep note)
+
+RUN apt install build-essential -y
+
+# matching versions of mmdet3d requirements building from source
+RUN cd .. \
+ && git clone https://github.com/FindDefinition/cumm.git /cumm \
+ && git clone https://github.com/traveller59/spconv.git /spconv \
+ && pip uninstall cumm spconv -y \
+ && cd /cumm && git checkout tags/v0.7.13 && pip3 install -e .\
+ && cd ../spconv && git checkout tags/v2.3.8 && pip3 install --no-build-isolation -e .
+
+# some ros2 node deps
+RUN cd .. \
+ && python3 -m pip install --upgrade pip \
+ && python3 -m pip install --no-cache-dir transforms3d cv_bridge
+
+# more of those deps
+RUN apt update && apt install ros-humble-tf-transformations -y && apt install ros-humble-pcl-ros -y && apt install libboost-all-dev -y
+
+# # custom numpy variant - does not seem to make a difference
+# RUN cd /ros2_ws/src \
+#  && git clone https://github.com/Box-Robotics/ros2_numpy.git \
+#  && cd ros2_numpy \
+#  && git switch humble \
+#  && cd ../.. \
+#  && . /opt/ros/humble/setup.sh \
+#  && colcon build --packages-select ros2_numpy 
+
+# download weights (dep, binary)
+RUN curl -L -o /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/yolov7-tiny_last.weights \
+    https://github.com/AlexeyAB/darknet/releases/download/yolov4/yolov7-tiny.weights
+
+# [PKG_FIX] MMDET3D  >>>>>
+RUN sed -i 's:/home/dobayt/git/mmdetection3d:/ros2_ws/src/mmdetection3d:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
+ && sed -i 's:/home/dobayt/ros2_ws/src/formula_student_packages:/ros2_ws/src/formula_student_packages:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
+ && sed -i 's:/home/dobayt/git/mmdetection3d:/ros2_ws/src/mmdetection3d:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/launch/launch_cone_detector.py \
+ && sed -i 's:/home/dobayt/ros2_ws/src/formula_student_packages:/ros2_ws/src/formula_student_packages:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/launch/launch_cone_detector.py
+# <<<<< [PKG_FIX] MMDET3D
+
+# planner dep
+RUN python3 -m pip install --upgrade pip setuptools && pip install "fsd-path-planning @ git+https://git@github.com/papalotis/ft-fsd-path-planning.git"
+
+# build ros2 nodes
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build --packages-select \
+    lidar_centerpoint_detector \
+    tf2_ros \
+    kalman_pos  \
+    deprojection_cpp \
+    gmapping  \
+    motion_tracking \
+    lidar_pre_filter \
+    cone_detection_lidar \
+    detection \
+    prcp_object_fusion \
+    planner
+
+ENTRYPOINT ["/bin/bash"]
+
+# #RENV (runtime environment variables)
+ARG CONEDET_MODE=N
+ENV CONEDET_MODE=${CONEDET_MODE}
+
+# RUN apt clean && rm -rf /var/lib/apt/lists/*
