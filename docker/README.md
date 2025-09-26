@@ -2,7 +2,14 @@
 Using this dockerfile it is possible to launch the whole system (ROS2 backend) in a virtually separated container. This should simplify installation and launch (but may come with its own disadvantages).  
 
 > [!NOTE]  
-> <small>Note: This is a single-**architecture** docker image, only meant for **x86-64 / AMD64** (like most laptops and desktop computers)... Other systems however (e.g. Jetson) may require an AArch64 / ARM64 docker image.</small>  
+> <small>Note: This is a single-**architecture** docker image, only meant for **x86-64 / AMD64** (like most laptops and desktop computers)... Other systems however (e.g. Jetson*) may require an AArch64 / ARM64 docker image.</small>  
+> <details>
+> <summary><small>Jetson Orin image</small></summary>
+> <small>There is an experimental dockerfile included for a Jetson Orin with a specific setup.<br>  
+> - It can be built the very same way as the default image, just by adding <i>-f filename</i> to the command before the path (dot).<br>  
+> - It is still in development, meant to run on [aarch64 / ARM64 system] Nvidia Jetson Orin with Jetpack 6.2 installed [see: dockerfile comments].<br>  
+> - The image has been built successfully - with limited functionality (e.g. no NNet LiDAR Detector node) - but reliability is not guaranteed.</small>
+> </details>
 
 The default **frontend** for this setup is **Foxglove Studio** [ https://foxglove.dev/download ] and it needs to be downloaded, installed and configured (customized) separately. Other software (such as RViZ*) can also be used instead, but their scope/access may be limited to within the container.  
 <sub><sup>*RViZ may need `export LD_LIBRARY_PATH=/opt/ros/humble/opt/rviz_ogre_vendor/lib:$LD_LIBRARY_PATH` first, for graphics.</sup></sub>
