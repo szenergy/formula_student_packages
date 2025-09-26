@@ -83,13 +83,17 @@ RUN cd /ros2_ws/src \
 # camera detection dependency
 RUN pip install cv_bridge
 
+# download weights (dep, binary)
+RUN curl -L -o /ros2_ws/src/formula_student_packages/cone_detection_camera/detection/detection/resources/yolov7-tiny_last.weights \
+    https://github.com/AlexeyAB/darknet/releases/download/yolov4/yolov7-tiny.weights
+
 # MMDetection3D default path fix
-# [PKG_FIX] MMDET  >>>>>
+# [PKG_FIX] MMDET3D  >>>>>
 RUN sed -i 's:/home/dobayt/git/mmdetection3d:/ros2_ws/src/mmdetection3d:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
  && sed -i 's:/home/dobayt/ros2_ws/src/formula_student_packages:/ros2_ws/src/formula_student_packages:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/lidar_centerpoint_detector/cone_detector.py \
  && sed -i 's:/home/dobayt/git/mmdetection3d:/ros2_ws/src/mmdetection3d:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/launch/launch_cone_detector.py \
  && sed -i 's:/home/dobayt/ros2_ws/src/formula_student_packages:/ros2_ws/src/formula_student_packages:g' /ros2_ws/src/formula_student_packages/lidar_centerpoint_detector/launch/launch_cone_detector.py
-# <<<<< [PKG_FIX] MMDET
+# <<<<< [PKG_FIX] MMDET3D
 
 # planner dependency
 RUN python3 -m pip install --upgrade pip setuptools && pip install "fsd-path-planning @ git+https://git@github.com/papalotis/ft-fsd-path-planning.git"
