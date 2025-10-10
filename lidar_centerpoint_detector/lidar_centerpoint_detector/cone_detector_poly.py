@@ -206,15 +206,6 @@ class ConeDetectorRosNode(Node):
 
         return tf_points
 
-    # def run_detector(self, input_pcl: np.array) -> np.ndarray:
-    #     pred_results, _ = inference_detector(self.model, input_pcl)
-
-    #     if self.get_parameter("/cone_detector/dataset").value == 'cone':
-    #         pred_dict_filtered = remove_low_score_cone(pred_results.to_dict()["pred_instances_3d"])
-    #     elif self.get_parameter("/cone_detector/dataset").value == 'nus':
-    #         pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
-
-    #     return pred_dict_filtered['scores_3d'], pred_dict_filtered['bboxes_3d'], pred_dict_filtered['labels_3d']
 
     def run_detector(self, input_pcl: np.array) -> np.ndarray:
         pred_results, _ = inference_detector(self.model, input_pcl)
@@ -224,11 +215,7 @@ class ConeDetectorRosNode(Node):
         elif self.get_parameter("/cone_detector/dataset").value == 'nus':
             pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
 
-        # prefer polylines if present, otherwise fall back to boxes
-        geom = pred_dict_filtered['polyln_3d'] if 'polyln_3d' in pred_dict_filtered \
-            else pred_dict_filtered['bboxes_3d']
-
-        return pred_dict_filtered['scores_3d'], geom, pred_dict_filtered['labels_3d']
+        return pred_dict_filtered['scores_3d'], pred_dict_filtered['polyln_3d'], pred_dict_filtered['labels_3d']
     
     def run_detector_trt(self, input_pcl: np.array) -> np.ndarray:
         t1 = default_timer()
@@ -246,102 +233,6 @@ class ConeDetectorRosNode(Node):
 
         return pred_dict_filtered['scores_3d'], pred_dict_filtered['bboxes_3d'], pred_dict_filtered['labels_3d']
 
-    # # CALLBACKS
-    # def lidar_callback(self, msg):
-    #     arr_bbox = MarkerArray()
-
-    #     t1 = default_timer()
-    #     msg_cloud = ros2_numpy.point_cloud2.pointcloud2_to_array(msg)
-    #     np_p = self.get_xyz_points(msg_cloud, True)
-    #     scores, dt_box_lidar_no_tf, types = self.run_detector(np_p)
-
-    #     H = np.eye(4, dtype=np.float32)
-    #     H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
-    #     H[:3, 3] = [0.466, 0.0, 0.849]
-    #     H = np.linalg.inv(H)
-    #     # transform bbox from veh coord sys to sensor coord sys
-    #     dt_box_lidar = self.transform_points(dt_box_lidar_no_tf, H).astype(np.float32)
-    #     if scores.size != 0:
-    #         for i in range(scores.size):
-    #             # ---------- MARKER FORMAT ----------------
-    #             marker = Marker()
-    #             marker.header.frame_id = msg.header.frame_id
-    #             marker.header.stamp = msg.header.stamp
-    #             marker.ns = "bounding_boxes"
-    #             marker.id = i
-    #             marker.type = Marker.CUBE
-    #             marker.action = Marker.ADD
-    #             marker.pose.position.x = float(dt_box_lidar[i][0])
-    #             marker.pose.position.y = float(dt_box_lidar[i][1])
-    #             marker.pose.position.z = float(dt_box_lidar[i][2])
-                
-    #             q = self.yaw2quaternion(float(dt_box_lidar[i][8]))
-    #             marker.pose.orientation.x = q[1]
-    #             marker.pose.orientation.y = q[2]
-    #             marker.pose.orientation.z = q[3]
-    #             marker.pose.orientation.w = q[0]
-                
-    #             marker.scale.x = float(dt_box_lidar[i][4])
-    #             marker.scale.y = float(dt_box_lidar[i][3])
-    #             marker.scale.z = float(dt_box_lidar[i][5])
-                
-    #             marker.color.a = 0.85  # Alpha
-    #             if int(types[i]) == 1:
-    #                 marker.color.r = 0.0
-    #                 marker.color.g = 0.0
-    #                 marker.color.b = 1.0
-    #             elif int(types[i]) == 0:
-    #                 marker.color.r = 1.0
-    #                 marker.color.g = 1.0
-    #                 marker.color.b = 0.0
-    #             elif int(types[i]) == 3:
-    #                 marker.color.r = 1.0
-    #                 marker.color.g = 0.0
-    #                 marker.color.b = 0.0
-    #             elif int(types[i]) == 2:
-    #                 marker.color.r = 1.0
-    #                 marker.color.g = 0.65
-    #                 marker.color.b = 0.0
-    #             # elif int(types[i]) == 9:
-    #             #     marker.color.r = 1.0
-    #             #     marker.color.g = 1.0
-    #             #     marker.color.b = 1.0
-    #             # elif int(types[i]) == 8:
-    #             #     marker.color.r = 0.0
-    #             #     marker.color.g = 1.0
-    #             #     marker.color.b = 0.0
-    #             # elif int(types[i]) == 7:
-    #             #     marker.color.r = 0.0
-    #             #     marker.color.g = 0.5
-    #             #     marker.color.b = 1.0
-    #             # elif int(types[i]) == 6:
-    #             #     marker.color.r = 1.0
-    #             #     marker.color.g = 1.0
-    #             #     marker.color.b = 0.0
-    #             # elif int(types[i]) == 5:
-    #             #     marker.color.r = 1.0
-    #             #     marker.color.g = 0.0
-    #             #     marker.color.b = 1.0
-    #             # elif int(types[i]) == 4:
-    #             #     marker.color.r = 0.0
-    #             #     marker.color.g = 1.0
-    #             #     marker.color.b = 1.0
-    #             else:
-    #                 marker.color.r = 1.0
-    #                 marker.color.g = 1.0
-    #                 marker.color.b = 1.0  # Default color white for unknown types
-                
-    #             marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))  # Set lifetime to 0.2 seconds
-
-    #             arr_bbox.markers.append(marker)
-    #     print("total callback time: ", 1/(default_timer() - t1))
-    #     if len(arr_bbox.markers) > 0:
-    #         self.pub_arr_bbox.publish(arr_bbox)
-    #         arr_bbox.markers = []
-    #     else:
-    #         arr_bbox.markers = []
-    #         self.pub_arr_bbox.publish(arr_bbox)
-
 
     def lidar_callback(self, msg):
         arr_bbox = MarkerArray()
@@ -349,7 +240,7 @@ class ConeDetectorRosNode(Node):
         t1 = default_timer()
         msg_cloud = ros2_numpy.point_cloud2.pointcloud2_to_array(msg)
         np_p = self.get_xyz_points(msg_cloud, True)
-        scores, geoms_no_tf, types = self.run_detector(np_p)  # may be boxes or polylines
+        scores, dt_poly_lidar_no_tf, types = self.run_detector(np_p)  # may be boxes or polylines
 
         # common TF
         H = np.eye(4, dtype=np.float32)
@@ -363,89 +254,42 @@ class ConeDetectorRosNode(Node):
             return out.astype(np.float32)
 
         if scores.size != 0:
-            # Heuristic: boxes typically have >=7 dims (x,y,z,dx,dy,dz,yaw[,vx,vy])
-            # Polylines are encoded as concatenated (x,y,z, ...), so feature dim % 3 == 0 and < 7
-            feat_dim = geoms_no_tf.shape[1] if geoms_no_tf.ndim == 2 else 0
-            is_box_like = feat_dim >= 7
-            is_poly_like = (feat_dim % 3 == 0) and (feat_dim < 7 or feat_dim >= 9 and 'poly' in str(type(geoms_no_tf)).lower())
+            feat_dim = dt_poly_lidar_no_tf.shape[1] if dt_poly_lidar_no_tf.ndim == 2 else 0
+            # geoms_no_tf[i] encodes concatenated (x,y,z, x,y,z, ...) in VEH frame
+            from geometry_msgs.msg import Point
 
-            if is_box_like:
-                # for boxes, apply TF to bbox centers only, keep other dims (dx,dy,dz,yaw) unchanged
-                dt_box_lidar = self.transform_points(geoms_no_tf, H).astype(np.float32)
-                for i in range(scores.size):
-                    marker = Marker()
-                    marker.header.frame_id = msg.header.frame_id
-                    marker.header.stamp = msg.header.stamp
-                    marker.ns = "bounding_boxes"
-                    marker.id = i
-                    marker.type = Marker.CUBE
-                    marker.action = Marker.ADD
+            n_ctrl = feat_dim // 3
+            for i in range(scores.size):
+                flat = dt_poly_lidar_no_tf[i]
+                # guard
+                if flat.ndim != 1 or flat.size < 6 or flat.size % 3 != 0:
+                    continue
+                ctrl_vehicle = flat.reshape(n_ctrl, 3)
+                ctrl_sensor = _tf_xyz_pts(ctrl_vehicle)
 
-                    marker.pose.position.x = float(dt_box_lidar[i][0])
-                    marker.pose.position.y = float(dt_box_lidar[i][1])
-                    marker.pose.position.z = float(dt_box_lidar[i][2])
+                marker = Marker()
+                marker.header.frame_id = msg.header.frame_id
+                marker.header.stamp = msg.header.stamp
+                marker.ns = "polylines"
+                marker.id = i
+                marker.type = Marker.LINE_STRIP
+                marker.action = Marker.ADD
 
-                    q = self.yaw2quaternion(float(dt_box_lidar[i][8]))
-                    marker.pose.orientation.x = q[1]
-                    marker.pose.orientation.y = q[2]
-                    marker.pose.orientation.z = q[3]
-                    marker.pose.orientation.w = q[0]
+                # width of the line
+                marker.scale.x = 0.08
+                marker.color.a = 0.95
+                if int(types[i]) == 1:
+                    marker.color.r, marker.color.g, marker.color.b = (0.0, 0.0, 1.0)   # blue
+                elif int(types[i]) == 0:
+                    marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 0.0)   # yellow
+                elif int(types[i]) == 2:
+                    marker.color.r, marker.color.g, marker.color.b = (1.0, 0.65, 0.0) # orange/big
+                else:
+                    marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 1.0)
 
-                    marker.scale.x = float(dt_box_lidar[i][4])
-                    marker.scale.y = float(dt_box_lidar[i][3])
-                    marker.scale.z = float(dt_box_lidar[i][5])
-
-                    marker.color.a = 0.85
-                    if int(types[i]) == 1:
-                        marker.color.r, marker.color.g, marker.color.b = (0.0, 0.0, 1.0)
-                    elif int(types[i]) == 0:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 0.0)
-                    elif int(types[i]) == 3:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 0.0, 0.0)
-                    elif int(types[i]) == 2:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 0.65, 0.0)
-                    else:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 1.0)
-
-                    marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))
-                    arr_bbox.markers.append(marker)
-
-            else:
-                # geoms_no_tf[i] encodes concatenated (x,y,z, x,y,z, ...) in VEH frame
-                from geometry_msgs.msg import Point
-
-                n_ctrl = feat_dim // 3
-                for i in range(scores.size):
-                    flat = geoms_no_tf[i]
-                    # guard
-                    if flat.ndim != 1 or flat.size < 6 or flat.size % 3 != 0:
-                        continue
-                    ctrl_vehicle = flat.reshape(n_ctrl, 3)
-                    ctrl_sensor = _tf_xyz_pts(ctrl_vehicle)
-
-                    marker = Marker()
-                    marker.header.frame_id = msg.header.frame_id
-                    marker.header.stamp = msg.header.stamp
-                    marker.ns = "polylines"
-                    marker.id = i
-                    marker.type = Marker.LINE_STRIP
-                    marker.action = Marker.ADD
-
-                    # width of the line
-                    marker.scale.x = 0.08
-                    marker.color.a = 0.95
-                    if int(types[i]) == 1:
-                        marker.color.r, marker.color.g, marker.color.b = (0.0, 0.0, 1.0)   # blue
-                    elif int(types[i]) == 0:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 0.0)   # yellow
-                    elif int(types[i]) == 2:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 0.65, 0.0) # orange/big
-                    else:
-                        marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 1.0)
-
-                    marker.points = [Point(x=float(p[0]), y=float(p[1]), z=float(p[2])) for p in ctrl_sensor]
-                    marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))
-                    arr_bbox.markers.append(marker)
+                marker.points = [Point(x=float(p[0]), y=float(p[1]), z=float(p[2])) for p in ctrl_sensor]
+                marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))
+                arr_bbox.markers.append(marker)
 
         print("total callback time: ", 1/(default_timer() - t1))
         self.pub_arr_bbox.publish(arr_bbox)
