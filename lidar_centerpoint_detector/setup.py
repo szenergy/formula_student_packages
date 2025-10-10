@@ -22,6 +22,8 @@ setup(
     entry_points={
         'console_scripts': [
             'cone_detector = lidar_centerpoint_detector.cone_detector:main',
+            'cone_detector_poly = lidar_centerpoint_detector.cone_detector_poly:main',
         ],
     },
 )
+
