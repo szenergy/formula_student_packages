@@ -123,28 +123,6 @@ def remove_low_score_nu(image_anno: dict) -> dict:
 
     return img_filtered_annotations
 
-# def remove_low_score_cone(image_anno: dict) -> dict:
-#     img_filtered_annotations = {}
-#     label_preds_ = image_anno["labels_3d"].detach().cpu().numpy()
-#     scores_ = image_anno["scores_3d"].detach().cpu().numpy()
-
-#     cone_yellow = get_annotations_indices(0, 0.35, label_preds_, scores_)
-#     cone_blue = get_annotations_indices(1, 0.35, label_preds_, scores_)
-#     #cone_orange = get_annotations_indices(2, 0.35, label_preds_, scores_)
-#     cone_big = get_annotations_indices(2, 0.1, label_preds_, scores_)
-    
-#     for key in image_anno.keys():
-#         if key == 'polyln_3d':
-#             continue
-#         img_filtered_annotations[key] = (
-#             image_anno[key].detach().cpu().numpy()[
-#                             cone_yellow +
-#                             cone_blue +
-#                             #cone_orange +
-#                             cone_big
-#                             ])
-
-#     return img_filtered_annotations
 
 def remove_low_score_cone(image_anno: dict) -> dict:
     img_filtered_annotations = {}
@@ -346,68 +324,6 @@ class ConeDetectorRosNode(Node):
             pred_dict_filtered = remove_low_score_nu(pred_results.to_dict()["pred_instances_3d"])
 
         return pred_dict_filtered['scores_3d'], pred_dict_filtered['bboxes_3d'], pred_dict_filtered['labels_3d']
-
-
-    # def lidar_callback(self, msg):
-    #     arr_bbox = MarkerArray()
-
-    #     t1 = default_timer()
-    #     msg_cloud = ros2_numpy.point_cloud2.pointcloud2_to_array(msg)
-    #     np_p = self.get_xyz_points(msg_cloud, True)
-    #     scores, dt_poly_lidar_no_tf, types = self.run_detector(np_p)  # may be boxes or polylines
-
-    #     # common TF
-    #     H = np.eye(4, dtype=np.float32)
-    #     H[:3, :3] = rot.from_euler("xyz", [0.0, 0.0, np.pi]).as_matrix()
-    #     H[:3, 3] = [0.466, 0.0, 0.849]
-    #     H = np.linalg.inv(H)
-
-    #     def _tf_xyz_pts(xyz):  # xyz: (M,3)
-    #         pts = np.hstack((xyz, np.ones((xyz.shape[0], 1), dtype=xyz.dtype)))
-    #         out = (pts @ H.T)[:, :3]
-    #         return out.astype(np.float32)
-
-    #     if scores.size != 0:
-    #         feat_dim = dt_poly_lidar_no_tf.shape[1] if dt_poly_lidar_no_tf.ndim == 2 else 0
-    #         # geoms_no_tf[i] encodes concatenated (x,y,z, x,y,z, ...) in VEH frame
-    #         from geometry_msgs.msg import Point
-
-    #         n_ctrl = feat_dim // 3
-    #         for i in range(scores.size):
-    #             flat = dt_poly_lidar_no_tf[i]
-    #             # guard
-    #             if flat.ndim != 1 or flat.size < 6 or flat.size % 3 != 0:
-    #                 continue
-    #             ctrl_vehicle = flat.reshape(n_ctrl, 3)
-    #             ctrl_sensor = _tf_xyz_pts(ctrl_vehicle)
-
-    #             marker = Marker()
-    #             marker.header.frame_id = msg.header.frame_id
-    #             marker.header.stamp = msg.header.stamp
-    #             marker.ns = "polylines"
-    #             marker.id = i
-    #             marker.type = Marker.LINE_STRIP
-    #             marker.action = Marker.ADD
-
-    #             # width of the line
-    #             marker.scale.x = 0.08
-    #             marker.color.a = 0.95
-    #             if int(types[i]) == 1:
-    #                 marker.color.r, marker.color.g, marker.color.b = (0.0, 0.0, 1.0)   # blue
-    #             elif int(types[i]) == 0:
-    #                 marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 0.0)   # yellow
-    #             elif int(types[i]) == 2:
-    #                 marker.color.r, marker.color.g, marker.color.b = (1.0, 0.65, 0.0) # orange/big
-    #             else:
-    #                 marker.color.r, marker.color.g, marker.color.b = (1.0, 1.0, 1.0)
-
-    #             marker.points = [Point(x=float(p[0]), y=float(p[1]), z=float(p[2])) for p in ctrl_sensor]
-    #             marker.lifetime = Duration(sec=0, nanosec=int(0.2 * 1e9))
-    #             arr_bbox.markers.append(marker)
-
-    #     print("total callback time: ", 1/(default_timer() - t1))
-    #     self.pub_arr_bbox.publish(arr_bbox)
-    #     arr_bbox.markers = []
 
 
     def lidar_callback(self, msg):
