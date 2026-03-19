@@ -7,6 +7,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "pcl/filters/crop_box.h"
@@ -301,6 +303,14 @@ class LidarConeSim : public rclcpp::Node {
             {
                 noise_radius_ = param.as_int();
             }
+            if (param.get_name() == "car_pose_topic")
+            {
+                car_pose_topic_ = param.as_string();
+            }
+            if (param.get_name() == "car_speed_topic")
+            {
+                car_speed_topic_ = param.as_string();
+            }
         }
         return result;
     }
@@ -325,6 +335,8 @@ public:
     this->declare_parameter("visible_pointcloud_topic", visible_pointcloud_topic_);
     this->declare_parameter("noise_num_points", noise_num_points_);
     this->declare_parameter("noise_radius", noise_radius_);
+    this->declare_parameter("car_pose_topic", car_pose_topic_);
+    this->declare_parameter("car_speed_topic", car_speed_topic_);
 
     this->get_parameter("track_keypoints", track_keypoints_);
     this->get_parameter("track_radius", track_radius_);
@@ -344,6 +356,8 @@ public:
     this->get_parameter("visible_pointcloud_topic", visible_pointcloud_topic_);
     this->get_parameter("noise_num_points", noise_num_points_);
     this->get_parameter("noise_radius", noise_radius_);
+    this->get_parameter("car_pose_topic", car_pose_topic_);
+    this->get_parameter("car_speed_topic", car_speed_topic_);
 
     // if seed is 0, generate a random integer
     if (seed_ == 0) {
@@ -354,6 +368,8 @@ public:
     pub_lidar = this->create_publisher<sensor_msgs::msg::PointCloud2>(track_pointcloud_topic_, 10);
     vis_lidar = this->create_publisher<sensor_msgs::msg::PointCloud2>(visible_pointcloud_topic_, 10);
     pub_centerline = this->create_publisher<visualization_msgs::msg::MarkerArray>(centerline_topic_, 10);
+    pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(car_pose_topic_, 10);
+    pub_speed_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(car_speed_topic_, 10);
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&LidarConeSim::parametersCallback, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(hz_to_ms(update_frequency_)),
@@ -364,6 +380,11 @@ public:
     track_points_ = interpolateSpline(track_points_, num_interpolated_points_); // Interpolate with 50 points for smoothness
     cones_ = generateConePoints(track_points_, cone_spacing_, cone_distance_, noise_num_points_, noise_radius_);  // Cone spacing and distance from track
     centerline_points_ = generateCenterlinePoints(track_points_); // Centerline points for visualization
+
+    // Initialize heading tracking from the first track segment
+    double init_dx = track_points_[1].first - track_points_[0].first;
+    double init_dy = track_points_[1].second - track_points_[0].second;
+    last_world_heading_ = atan2(init_dy, init_dx);
   }
 
 private:
@@ -406,6 +427,44 @@ private:
         cloud->points[i].y = -new_y;
         cloud->points[i].z = new_z;
         cloud->points[i].intensity = std::get<2>(cones_[idx]); // Set intensity based on inner (1) or outer (2) cone
+    }
+
+    // Compute and publish car speed and heading
+    {
+      double dx_seg = x2 - x1;
+      double dy_seg = y2 - y1;
+      double segment_length = std::sqrt(dx_seg * dx_seg + dy_seg * dy_seg);
+
+      // Accumulate heading from world-frame forward direction, handling wrap-around
+      double world_heading = atan2(dy_seg, dx_seg);
+      double delta = world_heading - last_world_heading_;
+      if (delta > M_PI)  delta -= 2.0 * M_PI;
+      if (delta < -M_PI) delta += 2.0 * M_PI;
+      cumulative_heading_ -= delta;
+      last_world_heading_ = world_heading;
+
+      // Speed in m/s: distance of this step times the publish frequency
+      double speed = segment_length * update_frequency_;
+
+      geometry_msgs::msg::PoseStamped pose_msg;
+      pose_msg.header.stamp = this->now();
+      pose_msg.header.frame_id = lidar_frame_;
+      pose_msg.pose.position.x = 0.0;
+      pose_msg.pose.position.y = 0.0;
+      pose_msg.pose.position.z = 0.0;
+      // rotate to match the track direction
+      double yaw = cumulative_heading_ + M_PI / 2.0;
+      pose_msg.pose.orientation.x = 0.0;
+      pose_msg.pose.orientation.y = 0.0;
+      pose_msg.pose.orientation.z = std::sin(yaw / 2.0);
+      pose_msg.pose.orientation.w = std::cos(yaw / 2.0);
+      pub_pose_->publish(pose_msg);
+
+      geometry_msgs::msg::TwistStamped twist_msg;
+      twist_msg.header.stamp = this->now();
+      twist_msg.header.frame_id = lidar_frame_;
+      twist_msg.twist.linear.x = speed;
+      pub_speed_->publish(twist_msg);
     }
 
     // Update the current index
@@ -492,6 +551,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr vis_lidar;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_centerline;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr pub_speed_;
   rclcpp::TimerBase::SharedPtr timer_;
   
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
@@ -521,6 +582,13 @@ private:
   double crop_minY_ = -15.0;
   double crop_maxX_ = 15.0;
   double crop_maxY_ = 15.0;
+
+  std::string car_pose_topic_ = "car_pose";
+  std::string car_speed_topic_ = "car_speed";
+
+  // Heading tracking
+  double cumulative_heading_ = 0.0;
+  double last_world_heading_ = 0.0;
 };
 
 int main(int argc, char *argv[]) {

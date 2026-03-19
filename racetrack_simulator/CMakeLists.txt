@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
@@ -22,6 +23,7 @@ set(INCLUDE_DIRS
   ${pcl_ros_INCLUDE_DIRS} 
   ${std_msgs_INCLUDE_DIRS}
   ${sensor_msgs_INCLUDE_DIRS}
+  ${geometry_msgs_INCLUDE_DIRS}
   ${rclcpp_components_INCLUDE_DIRS}
   ${visualization_msgs_INCLUDE_DIRS}
 )
@@ -32,6 +34,7 @@ set(ament_dependencies
   rclcpp
   std_msgs
   sensor_msgs
+  geometry_msgs
   visualization_msgs
   PCL
   pcl_ros

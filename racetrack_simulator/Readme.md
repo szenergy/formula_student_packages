@@ -74,13 +74,17 @@ This node simulates a racetrack with cones and publishes the lidar point cloud d
 | `crop_maxY`               | double  | Maximum Y value for cropping the point cloud, for generating the visible point cloud. |
 | `noise_num_points`        | int     | Number of noise points added outside of the track.                          |
 | `noise_radius`            | double  | Radius of the noise points.                                                 |
+| `car_pose_topic`          | string  | Topic name for publishing the car's heading pose.                           |
+| `car_speed_topic`         | string  | Topic name for publishing the car's speed.                                  |
 
 #### Topics
-| Topic                  | Type                                  | Description                           |
-|------------------------|---------------------------------------|---------------------------------------|
-| `/nonground`           | `sensor_msgs/msg/PointCloud2`         | Publishes the lidar point cloud data. |
-| `/racetrack_centerline`| `visualization_msgs/msg/MarkerArray`  | Publishes the racetrack centerline.   |
-| `/visible_points`      | `sensor_msgs/msg/PointCloud2`         | Publishes the visible point cloud data. |
+| Topic                  | Type                                    | Description                                                                 |
+|------------------------|-----------------------------------------|-----------------------------------------------------------------------------|
+| `/nonground`           | `sensor_msgs/msg/PointCloud2`           | Publishes the full lidar point cloud data.                                  |
+| `/racetrack_centerline`| `visualization_msgs/msg/MarkerArray`    | Publishes the racetrack centerline.                                         |
+| `/visible_points`      | `sensor_msgs/msg/PointCloud2`           | Publishes the cropped (visible) point cloud data.                           |
+| `/car_pose`            | `geometry_msgs/msg/PoseStamped`         | Publishes the car's heading as a pose at the origin, rotating as the car turns. |
+| `/car_speed`           | `geometry_msgs/msg/TwistStamped`        | Publishes the car's speed in m/s in `linear.x`.                            |
 
 ### 2. `AccuracyMeter` Node
 This node evaluates the accuracy of predicted points against a given racetrack centerline and publishes the accuracy information.
