@@ -2,13 +2,21 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <atomic>
+#include <thread>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav_msgs/msg/odometry.hpp"
+#include "tf2_ros/transform_broadcaster.h"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "pcl/filters/crop_box.h"
@@ -311,6 +319,14 @@ class LidarConeSim : public rclcpp::Node {
             {
                 car_speed_topic_ = param.as_string();
             }
+            if (param.get_name() == "car_odom_topic")
+            {
+                car_odom_topic_ = param.as_string();
+            }
+            if (param.get_name() == "odom_frame")
+            {
+                odom_frame_ = param.as_string();
+            }
         }
         return result;
     }
@@ -337,6 +353,8 @@ public:
     this->declare_parameter("noise_radius", noise_radius_);
     this->declare_parameter("car_pose_topic", car_pose_topic_);
     this->declare_parameter("car_speed_topic", car_speed_topic_);
+    this->declare_parameter("car_odom_topic", car_odom_topic_);
+    this->declare_parameter("odom_frame", odom_frame_);
 
     this->get_parameter("track_keypoints", track_keypoints_);
     this->get_parameter("track_radius", track_radius_);
@@ -358,6 +376,8 @@ public:
     this->get_parameter("noise_radius", noise_radius_);
     this->get_parameter("car_pose_topic", car_pose_topic_);
     this->get_parameter("car_speed_topic", car_speed_topic_);
+    this->get_parameter("car_odom_topic", car_odom_topic_);
+    this->get_parameter("odom_frame", odom_frame_);
 
     // if seed is 0, generate a random integer
     if (seed_ == 0) {
@@ -366,10 +386,15 @@ public:
     }
 
     pub_lidar = this->create_publisher<sensor_msgs::msg::PointCloud2>(track_pointcloud_topic_, 10);
+    pub_lidar_odom = this->create_publisher<sensor_msgs::msg::PointCloud2>("nonground_odom", 10);
     vis_lidar = this->create_publisher<sensor_msgs::msg::PointCloud2>(visible_pointcloud_topic_, 10);
     pub_centerline = this->create_publisher<visualization_msgs::msg::MarkerArray>(centerline_topic_, 10);
+    pub_current_track_point_ = this->create_publisher<visualization_msgs::msg::Marker>("/current_track_point", 10);
+    pub_next_track_point_ = this->create_publisher<visualization_msgs::msg::Marker>("/next_track_point", 10);
     pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(car_pose_topic_, 10);
     pub_speed_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(car_speed_topic_, 10);
+    pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>(car_odom_topic_, 10);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     callback_handle_ = this->add_on_set_parameters_callback(std::bind(&LidarConeSim::parametersCallback, this, std::placeholders::_1));
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(hz_to_ms(update_frequency_)),
@@ -381,10 +406,51 @@ public:
     cones_ = generateConePoints(track_points_, cone_spacing_, cone_distance_, noise_num_points_, noise_radius_);  // Cone spacing and distance from track
     centerline_points_ = generateCenterlinePoints(track_points_); // Centerline points for visualization
 
-    // Initialize heading tracking from the first track segment
-    double init_dx = track_points_[1].first - track_points_[0].first;
-    double init_dy = track_points_[1].second - track_points_[0].second;
-    last_world_heading_ = atan2(init_dy, init_dx);
+    // Start keyboard thread for space-bar pause/resume
+    // Opens /dev/tty directly so it works even when stdin is a pipe (ros2 run / launch)
+    keyboard_thread_ = std::thread([this]() {
+      int tty_fd = open("/dev/tty", O_RDONLY);
+      if (tty_fd < 0) {
+        RCLCPP_WARN(this->get_logger(),
+          "[PAUSE] Nem sikerult megnyitni a /dev/tty-t — space pause nem elerheto.");
+        keyboard_thread_running_ = false;
+        return;
+      }
+
+      int flags = fcntl(tty_fd, F_GETFL, 0);
+      if (flags >= 0) {
+        fcntl(tty_fd, F_SETFL, flags | O_NONBLOCK);
+      }
+
+      struct termios oldt, newt;
+      tcgetattr(tty_fd, &oldt);
+      newt = oldt;
+      newt.c_lflag &= ~(ICANON | ECHO);
+      tcsetattr(tty_fd, TCSANOW, &newt);
+      RCLCPP_INFO(this->get_logger(),
+        "[PAUSE] SPACE = pause/resume. Topicok szunetelteteskor is aktivan maradnak.");
+      while (rclcpp::ok() && keyboard_thread_running_) {
+        char c = 0;
+        if (read(tty_fd, &c, 1) == 1 && c == ' ') {
+          paused_ = !paused_;
+          RCLCPP_INFO(this->get_logger(),
+            paused_ ? "[PAUSE]  Auto MEGALL  — space a folytatashoz."
+                    : "[RESUME] Auto FOLYTATJA a mozgast.");
+        }
+        usleep(20000);
+      }
+
+      tcsetattr(tty_fd, TCSANOW, &oldt);
+      close(tty_fd);
+    });
+
+  }
+
+  ~LidarConeSim() override {
+    keyboard_thread_running_ = false;
+    if (keyboard_thread_.joinable()) {
+      keyboard_thread_.join();
+    }
   }
 
 private:
@@ -404,17 +470,32 @@ private:
     double y1 = track_points_[current_index_].second;
     double x2 = track_points_[(current_index_ + 1) % track_points_.size()].first;
     double y2 = track_points_[(current_index_ + 1) % track_points_.size()].second;
+
+    // Find lookahead point along the spline from current_index_
+    double lookahead_dist = 1.0;
+    double accumulated_lookahead = 0.0;
+    size_t lookahead_idx = current_index_;
+    while (accumulated_lookahead < lookahead_dist) {
+        size_t next_idx = (lookahead_idx + 1) % track_points_.size();
+        double ldx = track_points_[next_idx].first - track_points_[lookahead_idx].first;
+        double ldy = track_points_[next_idx].second - track_points_[lookahead_idx].second;
+        accumulated_lookahead += std::sqrt(ldx * ldx + ldy * ldy);
+        lookahead_idx = next_idx;
+    }
+    double lookahead_x = track_points_[lookahead_idx].first;
+    double lookahead_y = track_points_[lookahead_idx].second;
+
     double angle = atan2(y1 - y2, x1 - x2); // Reverse direction
 
     // Function to rotate a point around the origin by -angle and then 90 degrees around y-axis
     auto rotatePoint = [angle](double x, double y) {
         double cos_angle = cos(-angle);
         double sin_angle = sin(-angle);
-        double new_x = x * cos_angle - y * sin_angle;
-        double new_y = x * sin_angle + y * cos_angle;
+        double rotated_x = x * cos_angle - y * sin_angle;
+        double rotated_y = x * sin_angle + y * cos_angle;
         // Rotate 90 degrees around y-axis (z becomes x, x becomes -z)
-        double rotated_x = -new_y;
-        double rotated_y = new_x;
+        //double rotated_x = -new_y;
+        //double rotated_y = new_x;
         double rotated_z = 0.0;
         return std::make_tuple(rotated_x, rotated_y, rotated_z);
     };
@@ -430,45 +511,88 @@ private:
     }
 
     // Compute and publish car speed and heading
+    double global_yaw = 0.0;
     {
       double dx_seg = x2 - x1;
       double dy_seg = y2 - y1;
-      double segment_length = std::sqrt(dx_seg * dx_seg + dy_seg * dy_seg);
+      double segment_length = paused_ ? 0.0 : std::sqrt(dx_seg * dx_seg + dy_seg * dy_seg);
 
-      // Accumulate heading from world-frame forward direction, handling wrap-around
-      double world_heading = atan2(dy_seg, dx_seg);
-      double delta = world_heading - last_world_heading_;
-      if (delta > M_PI)  delta -= 2.0 * M_PI;
-      if (delta < -M_PI) delta += 2.0 * M_PI;
-      cumulative_heading_ -= delta;
-      last_world_heading_ = world_heading;
+                        rclcpp::Time stamp = this->now();
+                        double dt = odom_initialized_ ? (stamp - last_odom_stamp_).seconds() : 1.0 / update_frequency_;
+                        if (dt <= 1e-6)
+                        {
+                            dt = 1.0 / update_frequency_;
+                        }
+                        odom_initialized_ = true;
+                        last_odom_stamp_ = stamp;
 
-      // Speed in m/s: distance of this step times the publish frequency
-      double speed = segment_length * update_frequency_;
+                        // Keep current left/right convention but use one consistent heading source.
+                        double motion_heading = -std::atan2(dy_seg, dx_seg);
+                        global_yaw = motion_heading + M_PI;
 
-      geometry_msgs::msg::PoseStamped pose_msg;
-      pose_msg.header.stamp = this->now();
-      pose_msg.header.frame_id = lidar_frame_;
-      pose_msg.pose.position.x = 0.0;
-      pose_msg.pose.position.y = 0.0;
-      pose_msg.pose.position.z = 0.0;
-      // rotate to match the track direction
-      double yaw = cumulative_heading_ + M_PI / 2.0;
+                        auto normalize_angle = [](double angle) {
+                            while (angle > M_PI) angle -= 2.0 * M_PI;
+                            while (angle < -M_PI) angle += 2.0 * M_PI;
+                            return angle;
+                        };
+
+                        if (!yaw_initialized_)
+                        {
+                            last_global_yaw_ = global_yaw;
+                            yaw_initialized_ = true;
+                        }
+                        double yaw_delta = normalize_angle(global_yaw - last_global_yaw_);
+                        double angular_speed = paused_ ? 0.0 : yaw_delta / dt;
+                        last_global_yaw_ = global_yaw;
+
+                        double speed = segment_length / dt;
+                        if (!paused_) {
+                            odom_x_ += segment_length * std::cos(motion_heading);
+                            odom_y_ += segment_length * std::sin(motion_heading);
+                        }
+
+            geometry_msgs::msg::PoseStamped pose_msg;
+            pose_msg.header.stamp = stamp;
+            pose_msg.header.frame_id = odom_frame_;
+            pose_msg.pose.position.x = odom_x_;
+            pose_msg.pose.position.y = odom_y_;
+            pose_msg.pose.position.z = 0.0;
       pose_msg.pose.orientation.x = 0.0;
       pose_msg.pose.orientation.y = 0.0;
-      pose_msg.pose.orientation.z = std::sin(yaw / 2.0);
-      pose_msg.pose.orientation.w = std::cos(yaw / 2.0);
+            pose_msg.pose.orientation.z = std::sin(global_yaw / 2.0);
+            pose_msg.pose.orientation.w = std::cos(global_yaw / 2.0);
       pub_pose_->publish(pose_msg);
 
       geometry_msgs::msg::TwistStamped twist_msg;
-      twist_msg.header.stamp = this->now();
+            twist_msg.header.stamp = stamp;
       twist_msg.header.frame_id = lidar_frame_;
       twist_msg.twist.linear.x = speed;
       pub_speed_->publish(twist_msg);
+
+            nav_msgs::msg::Odometry odom_msg;
+            odom_msg.header.stamp = stamp;
+            odom_msg.header.frame_id = odom_frame_;
+            odom_msg.child_frame_id = lidar_frame_;
+            odom_msg.pose.pose = pose_msg.pose;
+            odom_msg.twist.twist.linear.x = speed;
+            odom_msg.twist.twist.angular.z = angular_speed;
+            pub_odom_->publish(odom_msg);
+
+            geometry_msgs::msg::TransformStamped odom_tf;
+            odom_tf.header.stamp = stamp;
+            odom_tf.header.frame_id = odom_frame_;
+            odom_tf.child_frame_id = lidar_frame_;
+            odom_tf.transform.translation.x = odom_x_;
+            odom_tf.transform.translation.y = odom_y_;
+            odom_tf.transform.translation.z = 0.0;
+            odom_tf.transform.rotation = pose_msg.pose.orientation;
+            tf_broadcaster_->sendTransform(odom_tf);
     }
 
-    // Update the current index
-    current_index_ = (current_index_ + 1) % track_points_.size();  // Move to the next track point
+    // Update the current index (only if not paused)
+    if (!paused_) {
+        current_index_ = (current_index_ + 1) % track_points_.size();
+    }
 
     // Publish the lidar point cloud
     sensor_msgs::msg::PointCloud2 output_msg;
@@ -476,6 +600,32 @@ private:
     output_msg.header.stamp = this->now();
     output_msg.is_dense = true;
     pub_lidar->publish(output_msg);
+
+    // Publish transformed nonground cloud in odom frame
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_odom(new pcl::PointCloud<pcl::PointXYZI>);
+    cloud_odom->header.frame_id = odom_frame_;
+    cloud_odom->height = cloud->height;
+    cloud_odom->width = cloud->width;
+    cloud_odom->is_dense = cloud->is_dense;
+    cloud_odom->points.resize(cloud->points.size());
+
+    const double cos_yaw = std::cos(global_yaw);
+    const double sin_yaw = std::sin(global_yaw);
+    for (size_t i = 0; i < cloud->points.size(); ++i) {
+      const auto &local_point = cloud->points[i];
+      auto &odom_point = cloud_odom->points[i];
+      odom_point.x = odom_x_ + cos_yaw * local_point.x - sin_yaw * local_point.y;
+      odom_point.y = odom_y_ + sin_yaw * local_point.x + cos_yaw * local_point.y;
+      odom_point.z = local_point.z;
+      odom_point.intensity = local_point.intensity;
+    }
+
+    sensor_msgs::msg::PointCloud2 output_msg_odom;
+    pcl::toROSMsg(*cloud_odom, output_msg_odom);
+    output_msg_odom.header.stamp = output_msg.header.stamp;
+    output_msg_odom.header.frame_id = odom_frame_;
+    output_msg_odom.is_dense = true;
+    pub_lidar_odom->publish(output_msg_odom);
 
     // Publish a second pointcloud, with cropped points to simulate "visible" cones
     // Make copy of cloud, as PointXYZ
@@ -545,15 +695,69 @@ private:
     // Publish the centerline marker
     marker_array.markers.push_back(line_strip);
     pub_centerline->publish(marker_array);
+
+        // Publish current track point marker as a visible green sphere
+        visualization_msgs::msg::Marker current_point_marker;
+        current_point_marker.header.frame_id = lidar_frame_;
+        current_point_marker.header.stamp = this->now();
+        current_point_marker.ns = "racetrack";
+        current_point_marker.id = 1;
+        current_point_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        current_point_marker.action = visualization_msgs::msg::Marker::ADD;
+        current_point_marker.pose.position.x = 0.0;
+        current_point_marker.pose.position.y = 0.0;
+        current_point_marker.pose.position.z = 0.4;
+        current_point_marker.pose.orientation.x = 0.0;
+        current_point_marker.pose.orientation.y = 0.0;
+        current_point_marker.pose.orientation.z = 0.0;
+        current_point_marker.pose.orientation.w = 1.0;
+        current_point_marker.scale.x = 0.8;
+        current_point_marker.scale.y = 0.8;
+        current_point_marker.scale.z = 0.8;
+        current_point_marker.color.r = 0.0;
+        current_point_marker.color.g = 1.0;
+        current_point_marker.color.b = 0.0;
+        current_point_marker.color.a = 1.0;
+        pub_current_track_point_->publish(current_point_marker);
+
+        // Publish next track point marker as a visible blue sphere
+        auto [next_x, next_y, next_z] = rotatePoint(lookahead_x - x1, lookahead_y - y1);
+        visualization_msgs::msg::Marker next_point_marker;
+        next_point_marker.header.frame_id = lidar_frame_;
+        next_point_marker.header.stamp = this->now();
+        next_point_marker.ns = "racetrack";
+        next_point_marker.id = 2;
+        next_point_marker.type = visualization_msgs::msg::Marker::SPHERE;
+        next_point_marker.action = visualization_msgs::msg::Marker::ADD;
+        next_point_marker.pose.position.x = next_x;
+        next_point_marker.pose.position.y = -next_y;
+        next_point_marker.pose.position.z = 0.4;
+        next_point_marker.pose.orientation.x = 0.0;
+        next_point_marker.pose.orientation.y = 0.0;
+        next_point_marker.pose.orientation.z = 0.0;
+        next_point_marker.pose.orientation.w = 1.0;
+        next_point_marker.scale.x = 0.8;
+        next_point_marker.scale.y = 0.8;
+        next_point_marker.scale.z = 0.8;
+        next_point_marker.color.r = 0.0;
+        next_point_marker.color.g = 0.0;
+        next_point_marker.color.b = 1.0;
+        next_point_marker.color.a = 1.0;
+        pub_next_track_point_->publish(next_point_marker);
   }
 
   // ROS2 publishers and timer
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_lidar_odom;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr vis_lidar;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_centerline;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_current_track_point_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr pub_next_track_point_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr pub_speed_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
   rclcpp::TimerBase::SharedPtr timer_;
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   
   OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
@@ -585,10 +789,19 @@ private:
 
   std::string car_pose_topic_ = "car_pose";
   std::string car_speed_topic_ = "car_speed";
+    std::string car_odom_topic_ = "car_odom";
+    std::string odom_frame_ = "odom";
 
-  // Heading tracking
-  double cumulative_heading_ = 0.0;
-  double last_world_heading_ = 0.0;
+    double odom_x_ = 0.0;
+    double odom_y_ = 0.0;
+    bool odom_initialized_ = false;
+    rclcpp::Time last_odom_stamp_{0, 0, RCL_ROS_TIME};
+    bool yaw_initialized_ = false;
+    double last_global_yaw_ = 0.0;
+
+    std::atomic<bool> paused_{false};
+    std::atomic<bool> keyboard_thread_running_{true};
+    std::thread keyboard_thread_;
 };
 
 int main(int argc, char *argv[]) {
