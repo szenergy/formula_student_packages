@@ -428,14 +428,14 @@ public:
       newt.c_lflag &= ~(ICANON | ECHO);
       tcsetattr(tty_fd, TCSANOW, &newt);
       RCLCPP_INFO(this->get_logger(),
-        "[PAUSE] SPACE = pause/resume. Topicok szunetelteteskor is aktivan maradnak.");
+        "[PAUSE] SPACE = pause/resume. Topics remain active.");
       while (rclcpp::ok() && keyboard_thread_running_) {
         char c = 0;
         if (read(tty_fd, &c, 1) == 1 && c == ' ') {
           paused_ = !paused_;
           RCLCPP_INFO(this->get_logger(),
-            paused_ ? "[PAUSE]  Auto MEGALL  — space a folytatashoz."
-                    : "[RESUME] Auto FOLYTATJA a mozgast.");
+            paused_ ? "[PAUSE]  Car paused  — space for resume."
+                    : "[RESUME] Car RESUMES movement.");
         }
         usleep(20000);
       }

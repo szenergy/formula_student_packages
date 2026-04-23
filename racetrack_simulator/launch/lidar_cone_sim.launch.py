@@ -28,7 +28,7 @@ def generate_launch_description():
                 {"crop_maxX": 15.0},
                 {"crop_maxY": 15.0},
                 {"visible_pointcloud_topic": "visible_points"}, # topic of the "visible points" (pub) (a point will be published here if it's in the cropbox)
-                {"noise_num_points": 400}, # number of noise points around the track
+                {"noise_num_points": 100}, # number of noise points around the track
                 {"noise_radius": 10}, # radius of the noise points (from the track's points)
                 {"car_pose_topic": "car_pose"}, # topic for the car's heading pose (pub)
                 {"car_speed_topic": "car_speed"}, # topic for the car's speed in m/s (pub)
